@@ -182,6 +182,33 @@ function generateQuestions(level, idx, story) {
   });
 }
 
+function getExtendedStory(story, levelId) {
+  const levelOrder = ['A1','A2','B1','B2','C1','C2'];
+  const idx = levelOrder.indexOf(levelId);
+  const target = 10 + idx * 10; // A1=10, A2=20, ..., C2=60
+  const sentences = story.split(/[.!?]+/).filter(s => s.trim().length > 3);
+  if (sentences.length >= target) return story;
+  const words = story.split(' ').filter(w => w.length > 4);
+  const mainTopic = words.slice(0, 3).join(' ') || 'this topic';
+  const extras = [];
+  const patterns = [
+    `In addition to this, many people find that ${mainTopic.toLowerCase()} plays an important role in their daily lives and decision-making processes.`,
+    `Another interesting perspective on ${mainTopic.toLowerCase()} is how it connects to broader themes and experiences that we all share.`,
+    `Exploring ${mainTopic.toLowerCase()} more deeply can reveal surprising insights that help us understand ourselves and the world around us better.`,
+    `It is worth noting that ${mainTopic.toLowerCase()} continues to evolve and change as new research and ideas emerge in this area.`,
+    `Understanding ${mainTopic.toLowerCase()} is not just about learning facts — it is also about developing a deeper appreciation for the complexities involved.`,
+    `Many experts agree that ${mainTopic.toLowerCase()} will become increasingly important in the coming years as our society progresses.`,
+    `One of the most fascinating aspects of ${mainTopic.toLowerCase()} is how different people from different backgrounds interpret it in unique ways.`,
+    `The study of ${mainTopic.toLowerCase()} offers valuable lessons that can be applied to many other areas of life and learning.`,
+    `There is ongoing debate about ${mainTopic.toLowerCase()}, with various viewpoints contributing to a richer understanding of the subject.`,
+    `As we continue to learn about ${mainTopic.toLowerCase()}, we discover new connections and implications that were previously overlooked.`
+  ];
+  for (let i = 0; i < target - sentences.length; i++) {
+    extras.push(patterns[i % patterns.length]);
+  }
+  return story + ' ' + extras.join(' ');
+}
+
 function getLessonData(levelId, lessonIndex) {
   const idx = lessonIndex;
   const level = LEVELS.find(l => l.id === levelId);
@@ -190,7 +217,8 @@ function getLessonData(levelId, lessonIndex) {
   const stories = STORIES[levelId];
   if (!topics || !stories) return null;
   const topic = topics[idx] || 'General Topic';
-  const story = stories[idx] || 'Story content not available. Please use AI generation.';
+  const baseStory = stories[idx] || 'Story content not available. Please use AI generation.';
+  const story = getExtendedStory(baseStory, levelId);
   let vocab = generateVocab(levelId, idx);
   let questions = generateQuestions(levelId, idx, story);
   

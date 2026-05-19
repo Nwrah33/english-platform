@@ -363,7 +363,10 @@ async function generatePodcastFromStory(story, topic, levelId) {
   if (key) {
     try {
       document.getElementById('podcast-text').innerHTML = '<div style="padding:20px;text-align:center;color:var(--text2)">🤖 جاري إنشاء البودكاست...</div>';
-      const minLines = level === 'A1' ? 40 : level === 'A2' ? 50 : level === 'B1' ? 60 : level === 'B2' ? 70 : 80;
+      const levelOrder = ['A1','A2','B1','B2','C1','C2'];
+      const levelIdx = levelOrder.indexOf(level);
+      const durationMin = (levelIdx + 1) * 5; // A1=5min, A2=10, B1=15, B2=20, C1=25, C2=30
+      const minLines = Math.ceil((durationMin * 60) / 20); // ~20s per line
       const prompt = `Write a podcast transcript for English level ${level}. Topic: "${topic}".
 
 This must be a CASUAL CHAT between two friends, NOT an interview. They discuss the topic naturally like friends having coffee.
@@ -404,6 +407,10 @@ Return ONLY valid JSON array (NO markdown, NO explanation):
 
   // === MAIN CHAT (natural flowing discussion) ===
   const sentences = story.split(/[.!?]+/).filter(s => s.trim().length > 5);
+  const levelOrder = ['A1','A2','B1','B2','C1','C2'];
+  const levelIdx = levelOrder.indexOf(level);
+  const durationMin = (levelIdx + 1) * 5;
+  const targetLines = Math.ceil((durationMin * 60) / 20);
   const chatRound = level === 'A1' ? 6 : level === 'A2' ? 8 : level === 'B1' ? 12 : level === 'B2' ? 16 : 20;
 
   // First, some general chat about the topic
@@ -421,10 +428,22 @@ Return ONLY valid JSON array (NO markdown, NO explanation):
     }
   });
 
-  // Additional natural chat
-  for (let i = 0; i < 3; i++) {
-    lines.push({ speaker: i % 2 === 0 ? 'host' : 'guest', text: `Another thing that I find really fascinating about ${topic} is how it connects to so many other aspects of our lives. It's not just an isolated thing that we can study and understand on its own — it's deeply connected to our habits, our routines, our relationships, our work, our hobbies, and so much more. And every time I think about it from a different angle, I discover something new, something that I hadn't noticed before. It's like peeling an onion — there's always another layer to discover, another insight to gain, another perspective to consider.` });
-    lines.push({ speaker: i % 2 === 0 ? 'guest' : 'host', text: `That's such a beautiful metaphor, and I completely agree with you! You know, I was talking to a friend the other day about exactly this, and we were both amazed at how much there is to say about ${topic} once you start exploring it in depth. It's one of those topics that seems simple on the surface — like, oh, we all know what ${topic} is, it's straightforward — but the moment you start asking questions and sharing experiences, you realize that there's an incredible depth and richness to it that you never expected. And that's what makes conversations like this so valuable for English learners, because they get to see how native speakers naturally explore and discuss complex topics in a flowing, conversational way.` });
+  // Fill remaining lines to reach target duration
+  const fillTopics = [
+    `One personal experience that really shaped my understanding of ${topic} happened a few years ago, and it completely changed how I think about this subject.`,
+    `I've noticed that when people discuss ${topic}, they often focus on the obvious aspects, but what's really interesting are the subtle, everyday moments that reveal its true importance in our lives.`,
+    `There's a book I read recently that explored ${topic} in a way I had never considered before, and it made me realize how much depth there is in this seemingly simple subject.`,
+    `My perspective on ${topic} has evolved significantly over the years as I've encountered different situations and had conversations with people from various backgrounds who each brought unique insights.`,
+    `One thing about ${topic} that I think deserves more attention is the way it connects to our emotional wellbeing and how understanding it better can improve our quality of life in unexpected ways.`,
+  ];
+  while (lines.length < targetLines) {
+    const fi = lines.length % fillTopics.length;
+    const speaker = lines.length % 2 === 0 ? 'host' : 'guest';
+    const prevSpeaker = lines.length % 2 === 0 ? 'guest' : 'host';
+    const prefix = speaker === 'host'
+      ? `That's a really interesting point, and it makes me think about something else. ${fillTopics[fi]} I believe this is something that everyone can relate to in their own unique way, and that's what makes ${topic} such a rich topic for discussion.`
+      : `I absolutely agree with what ${prevSpeaker === 'host' ? 'Sarah' : 'Mark'} just said, and I'd like to add my own thoughts on this as well. ${fillTopics[fi]} When I reflect on my own journey with ${topic}, I realize just how much it has shaped my thinking and influenced the way I approach various aspects of my life.`;
+    lines.push({ speaker, text: prefix });
   }
 
   // === WRAP UP (warm, natural ending) ===
@@ -484,30 +503,38 @@ function stopAmbient() {
   if (ambientCtx) { ambientCtx.close().catch(() => {}); ambientCtx = null; }
 }
 
+let lastApiCallTime = 0;
+
 async function speakWithAI(text, voiceName) {
   const key = getApiKey();
   if (!key) return false;
-  try {
-    const res = await fetch('https://api.openai.com/v1/audio/speech', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'tts-1', input: text, voice: voiceName, response_format: 'mp3' })
-    });
-    if (!res.ok) return false;
-    const blob = await res.blob();
-    const buf = await blob.arrayBuffer();
-    const ctx = getAudioCtx();
-    const audioBuf = await ctx.decodeAudioData(buf);
-    const source = ctx.createBufferSource();
-    source.buffer = audioBuf;
-    source.connect(ctx.destination);
-    source.start();
-    await new Promise(resolve => {
-      const t = setTimeout(resolve, 15000);
-      source.onended = () => { clearTimeout(t); resolve(); };
-    });
-    return true;
-  } catch (e) { return false; }
+  // Rate limit: at least 2s between API calls
+  const now = Date.now();
+  const wait = 2000 - (now - lastApiCallTime);
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 1500));
+    try {
+      lastApiCallTime = Date.now();
+      const res = await fetch('https://api.openai.com/v1/audio/speech', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'tts-1', input: text, voice: voiceName, response_format: 'mp3' })
+      });
+      if (!res.ok) { if (res.status === 429) continue; return false; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      await new Promise((resolve, reject) => {
+        const t = setTimeout(() => { URL.revokeObjectURL(url); reject(); }, 30000);
+        audio.onended = () => { clearTimeout(t); URL.revokeObjectURL(url); resolve(); };
+        audio.onerror = () => { clearTimeout(t); URL.revokeObjectURL(url); reject(); };
+        audio.play().catch(() => { clearTimeout(t); URL.revokeObjectURL(url); reject(); });
+      });
+      return true;
+    } catch (e) { /* retry once */ }
+  }
+  return false;
 }
 
 function playPodcast() {
@@ -534,19 +561,30 @@ async function speakNextPodcastSentence() {
     el.style.fontWeight = i === podcastSentenceIndex ? '700' : '400';
   });
 
+  // Show speaker indicator
+  const speakerEl = document.getElementById('podcast-speaker');
+  if (speakerEl) {
+    speakerEl.style.display = 'block';
+    speakerEl.textContent = isFemale ? '🎙️ سارة (مؤنث)' : '🎙️ مارك (مذكر)';
+    speakerEl.style.background = isFemale ? '#e0e7ff' : '#fef9c3';
+    speakerEl.style.color = isFemale ? '#1e40af' : '#92400e';
+  }
+
   // Try AI TTS (nova=female, onyx=male)
   const ok = await speakWithAI(sentence, isFemale ? 'nova' : 'onyx');
 
   if (!isPodcastPlaying) { stopPodcast(); return; }
 
   if (!ok) {
-    // Fallback: speechSynthesis
+    if (speakerEl) speakerEl.textContent += ' ⚠️ (صوت النظام)';
+    // Fallback: speechSynthesis with pitch differentiation
     if (speechSynthesis.speaking) speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(sentence);
     utter.lang = 'en-US';
     utter.rate = parseFloat(document.getElementById('podcast-speed').value) || 0.75;
-    utter.pitch = isFemale ? 1.3 : 0.8;
     const voices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'));
+    const sameVoices = voices.length <= 1;
+    utter.pitch = isFemale ? (sameVoices ? 1.4 : 1) : (sameVoices ? 0.6 : 1);
     if (isFemale) {
       utter.voice = voices.find(v => /zira|female|samantha|victoria|karen/i.test(v.name)) || voices[0] || null;
     } else {
