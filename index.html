@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>منصة تعلم الإنجليزية</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header id="header">
+      <div class="header-inner">
+        <div class="logo" onclick="navigate('home')">📚 English<span>Platform</span></div>
+        <nav>
+          <button class="nav-btn active" id="nav-home" onclick="navigate('home')">الرئيسية</button>
+          <button class="nav-btn" id="nav-levels" onclick="navigate('levels')">المستويات</button>
+          <button class="nav-btn" id="nav-progress" onclick="navigate('progress')">التقدم</button>
+          <button class="nav-btn" id="nav-settings" onclick="navigate('settings')">الإعدادات</button>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <!-- Home -->
+      <section id="view-home" class="view active">
+        <div class="hero">
+          <h1>أتقن اللغة الإنجليزية<br><span>مستوى بكل مرة</span></h1>
+          <p>من مبتدئ A1 إلى خبير C2 — ٦٠ درساً شاملاً للقراءة والاستماع والمفردات والمحادثة والاختبارات</p>
+          <button class="btn-primary" onclick="navigate('levels')">ابدأ التعلم</button>
+        </div>
+        <div class="level-cards" id="home-levels"></div>
+      </section>
+
+      <!-- Levels -->
+      <section id="view-levels" class="view">
+        <div class="view-header">
+          <h2>اختر مستواك</h2>
+          <p>اختر المستوى المناسب لتبدأ رحلة التعلم</p>
+        </div>
+        <div id="level-lock-info" class="lock-info"></div>
+        <div class="level-grid" id="level-grid"></div>
+      </section>
+
+      <!-- Lessons -->
+      <section id="view-lessons" class="view">
+        <div class="view-header">
+          <button class="btn-back" onclick="navigate('levels')">← الرجوع للمستويات</button>
+          <h2 id="lessons-title">الدروس</h2>
+          <p id="lessons-desc">اختر درساً للدراسة</p>
+        </div>
+        <div class="lessons-grid" id="lessons-grid"></div>
+      </section>
+
+      <!-- Lesson Detail -->
+      <section id="view-lesson" class="view">
+        <div class="view-header">
+          <button class="btn-back" onclick="goBackToLessons()">← الرجوع للدروس</button>
+          <h2 id="lesson-title">الدرس</h2>
+        </div>
+        <div class="tabs" id="lesson-tabs">
+          <button class="tab active" data-tab="story" onclick="switchTab('story')">📖 القصة</button>
+          <button class="tab" data-tab="listening" onclick="switchTab('listening')">🎧 الاستماع</button>
+          <button class="tab" data-tab="vocabulary" onclick="switchTab('vocabulary')">📝 الكلمات</button>
+          <button class="tab" data-tab="chat" onclick="switchTab('chat')">💬 المحادثة</button>
+          <button class="tab" data-tab="test" onclick="switchTab('test')">✍️ الاختبار</button>
+        </div>
+
+        <!-- Story Tab -->
+        <div class="tab-content" id="tab-story">
+          <div class="card">
+            <h3>القصة <span class="badge badge-ai" id="story-badge">📖</span></h3>
+            <div id="story-text" class="story-text" onclick="handleWordClick(event)"></div>
+            <div id="translation-popup" class="translation-popup" style="display:none">
+              <div id="translation-word" class="translation-word"></div>
+              <div id="translation-meaning" class="translation-meaning"></div>
+              <button class="btn-small" onclick="addWordToVocab()">➕ حفظ الكلمة</button>
+              <button class="btn-small" onclick="closeTranslation()">✕</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Listening Tab -->
+        <div class="tab-content" id="tab-listening" style="display:none">
+          <div class="card">
+            <div class="podcast-header">
+              <div class="podcast-icon">🎙️</div>
+              <div>
+                <h3 id="podcast-title">البودكاست التعليمي</h3>
+                <p class="podcast-subtitle" id="podcast-subtitle">استمع لمحادثة حول موضوع الدرس</p>
+              </div>
+            </div>
+            <div class="podcast-player" id="podcast-player">
+              <div class="podcast-wave" id="podcast-wave">
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+              </div>
+              <div class="podcast-controls">
+                <button class="btn-podcast" id="podcast-play-btn" onclick="playPodcast()">▶️</button>
+                <button class="btn-podcast" onclick="stopPodcast()">⏹️</button>
+                <div class="podcast-timer" id="podcast-timer">0:00 / 0:00</div>
+                <div class="speed-control">
+                  <label>السرعة:</label>
+                  <select id="podcast-speed" onchange="changePodcastSpeed(this.value)">
+                    <option value="0.5">0.5x</option>
+                    <option value="0.75">0.75x</option>
+                    <option value="1" selected>1x</option>
+                    <option value="1.25">1.25x</option>
+                    <option value="1.5">1.5x</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="podcast-transcript" id="podcast-transcript">
+              <h4>📖 نص القصة</h4>
+              <div id="listening-text"></div>
+              <h4 style="margin-top:16px">🎙️ نص البودكاست</h4>
+              <div id="podcast-text"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vocabulary Tab -->
+        <div class="tab-content" id="tab-vocabulary" style="display:none">
+          <div class="card">
+            <h3>الكلمات المهمة <span id="vocab-count"></span></h3>
+            <p class="hint">انقر على 🔊 لسماع النطق. اكتب الكلمة في الحقل لحفظها.</p>
+            <div id="vocab-list" class="vocab-list"></div>
+            <div class="vocab-practice" id="vocab-practice">
+              <h4>📝 تدريب كتابة الكلمات</h4>
+              <p>أكتب الكلمة الإنجليزية التي تعرف معناها:</p>
+              <div id="vocab-quiz-area" class="vocab-quiz-area"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat Tab -->
+        <div class="tab-content" id="tab-chat" style="display:none">
+          <div class="card chat-card">
+            <h3>🎥 مكالمة فيديو مع المعلم AI</h3>
+            <div class="video-call-container" id="video-call">
+              <div class="video-call-main">
+                <div class="video-avatar" id="ai-avatar">
+                  <div class="avatar-ring"></div>
+                  <div class="avatar-icon">🤖</div>
+                  <div class="avatar-name">AI Teacher</div>
+                  <div class="avatar-status" id="call-status">🟢 جاهز للتحدث</div>
+                </div>
+                <div class="call-controls">
+                  <button class="call-btn call-start" id="call-start-btn" onclick="startVideoCall()">📞 بدء المكالمة</button>
+                  <button class="call-btn call-end" id="call-end-btn" onclick="endVideoCall()" style="display:none">🔴 إنهاء</button>
+                </div>
+                <div class="call-conversation" id="call-conversation">
+                  <div class="call-bubble bot">مرحباً! أنا معلمك AI. دعنا نتحدث عن موضوع الدرس باللغة الإنجليزية. اضغط على "بدء المكالمة" للبدء.</div>
+                </div>
+              </div>
+              <div class="video-call-side">
+                <div class="call-transcript">
+                  <h4>📝 النص المكتوب</h4>
+                  <div id="call-transcript-text"></div>
+                </div>
+                <div class="call-text-input">
+                  <textarea id="chat-input" placeholder="أو اكتب هنا..." rows="2"></textarea>
+                  <button class="btn-primary" onclick="sendChatMessage()">إرسال</button>
+                </div>
+              </div>
+            </div>
+            <div id="voice-status" class="voice-status"></div>
+          </div>
+        </div>
+
+        <!-- Test Tab -->
+        <div class="tab-content" id="tab-test" style="display:none">
+          <div class="card">
+            <h3>✍️ الاختبار التفاعلي</h3>
+            <p class="hint">سؤال واحد كل مرة — أجب وشاهد النتيجة فوراً</p>
+            <div class="test-progress" id="test-progress">
+              <div class="test-progress-bar" id="test-progress-bar"></div>
+              <span id="test-progress-text">0/0</span>
+            </div>
+            <div id="test-container">
+              <div class="test-welcome">
+                <p>👋 اضغط "بدء الاختبار" لتبدأ!</p>
+                <button class="btn-primary" onclick="startDuolingoTest()">▶️ بدء الاختبار</button>
+              </div>
+            </div>
+            <div class="test-summary" id="test-summary" style="display:none"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Progress -->
+      <section id="view-progress" class="view">
+        <div class="view-header">
+          <h2>تقدمك</h2>
+          <p>تابع رحلة تعلمك</p>
+        </div>
+        <div id="progress-content" class="progress-content"></div>
+      </section>
+
+      <!-- Settings -->
+      <section id="view-settings" class="view">
+        <div class="view-header">
+          <h2>الإعدادات</h2>
+          <p>خصص تجربة التعلم الخاصة بك</p>
+        </div>
+        <div class="card">
+          <h3>🔑 مفتاح API (اختياري)</h3>
+          <p>للمحتوى الذكي والمحادثة الصوتية، أدخل مفتاح OpenAI API.</p>
+          <div class="input-group">
+            <input type="password" id="api-key-input" placeholder="sk-..." dir="ltr">
+            <button class="btn-primary" onclick="saveApiKey()">حفظ</button>
+          </div>
+          <small id="api-status"></small>
+        </div>
+        <div class="card">
+          <h3>🎤 إعدادات الصوت</h3>
+          <div class="setting-row">
+            <label>الصوت:</label>
+            <select id="voice-select"></select>
+          </div>
+        </div>
+        <div class="card">
+          <h3>📊 نظام المستويات</h3>
+          <p>للتقدم للمستوى التالي، يجب إكمال جميع دروس المستوى الحالي بنسبة نجاح ٨٠٪ على الأقل.</p>
+          <div id="level-requirements"></div>
+        </div>
+        <div class="card">
+          <h3>🔄 إعادة تعيين التقدم</h3>
+          <p>مسح جميع البيانات والبدء من جديد.</p>
+          <button class="btn-danger" onclick="resetProgress()">إعادة تعيين التقدم</button>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>منصة تعلم الإنجليزية — أتقن كل مستوى</p>
+    </footer>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
