@@ -358,73 +358,88 @@ function getArabicDict() {
 async function generatePodcastFromStory(story, topic, levelId) {
   const level = levelId || 'A1';
   const key = getApiKey();
+  const exchangeCount = level === 'A1' ? 20 : level === 'A2' ? 28 : level === 'B1' ? 36 : level === 'B2' ? 44 : 52;
 
   // Try AI generation first
   if (key) {
     try {
-      const prompt = `You are creating a podcast script for English learners at level ${level}.
-Topic: "${topic}"
-Story summary: "${story.substring(0, 300)}"
+      document.getElementById('podcast-text').innerHTML = '<div style="padding:20px;text-align:center;color:var(--text2)">🤖 جاري كتابة البودكاست بالذكاء الاصطناعي...</div>';
+      const prompt = `Create a podcast script for English level ${level}. Topic: "${topic}".
 
-Create a NATURAL, DETAILED conversation between a female host (Sarah) and a male guest (Mark).
+IMPORTANT: The script MUST have exactly ${exchangeCount} lines (${exchangeCount/2} exchanges between host and guest).
+
 Rules:
-- Make the conversation LONG and RICH, at least ${level === 'A1' ? '15' : level === 'A2' ? '20' : level === 'B1' ? '25' : level === 'B2' ? '30' : '35'} exchanges (host + guest = 1 exchange)
-- Each response must be at least 2-3 full sentences, NOT short phrases
-- Host introduces the topic, asks detailed questions
-- Guest gives thoughtful, detailed answers with examples
-- For A1: use simple vocabulary and short sentences but make it detailed
-- For C1/C2: use sophisticated vocabulary and complex ideas
-- The dialogue should feel like a REAL podcast conversation, not a reading exercise
+- Host (Sarah, female) asks detailed questions, guest (Mark, male) gives thoughtful answers
+- Each line must be 2-4 sentences long — rich, detailed, natural conversation
+- The conversation should explore the topic deeply with examples and explanations
+- For level ${level}: ${level === 'A1' ? 'simple words but rich content, each response 2-3 short sentences' : level === 'A2' ? 'basic grammar, each response 2-3 sentences with details' : level === 'B1' ? 'intermediate vocabulary, each response 3-4 sentences' : level === 'B2' ? 'complex sentences, abstract ideas, each response 3-4 sentences' : 'sophisticated vocabulary, nuanced discussion, each response 4-5 sentences'}
+- Start with warm greeting, end with proper farewell
 
-Return ONLY valid JSON array (no markdown):
+Return ONLY valid JSON array:
 [{"speaker":"host","text":"..."},{"speaker":"guest","text":"..."}]`;
 
       const result = await callAI([
-        { role: 'system', content: 'You create podcast scripts. Return only valid JSON arrays.' },
+        { role: 'system', content: 'You create podcast scripts. Return only valid JSON arrays with NO markdown.' },
         { role: 'user', content: prompt }
-      ], 2000);
+      ], 3000);
 
       if (result) {
         const cleaned = result.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
         const lines = JSON.parse(cleaned);
-        if (Array.isArray(lines) && lines.length > 4) return lines;
+        if (Array.isArray(lines) && lines.length > 8) return lines;
       }
-    } catch (e) { /* fallback to template */ }
+    } catch (e) { /* fallback */ }
   }
 
-  // Fallback: rich template-based podcast
-  const sentences = story.split(/[.!?]+/).filter(s => s.trim().length > 8);
-  const count = level === 'A1' ? 10 : level === 'A2' ? 14 : level === 'B1' ? 20 : level === 'B2' ? 26 : 32;
+  // RICH FALLBACK — long detailed conversation
+  const sentences = story.split(/[.!?]+/).filter(s => s.trim().length > 5);
   const lines = [];
 
-  // Welcome
-  lines.push({ speaker: 'host', text: `Hello everyone, and welcome to English Learning Podcast! I'm your host Sarah, and today we're going to talk about something very interesting: ${topic}. I have a special guest with me today, Mark. Welcome, Mark!` });
-  lines.push({ speaker: 'guest', text: `Thank you so much, Sarah! I'm really happy to be here today. ${topic} is a topic that I find absolutely fascinating, and I can't wait to share my thoughts and experiences with our listeners.` });
-  lines.push({ speaker: 'host', text: `That's great to hear! Before we dive deep into our discussion, I'd like to ask you: why do you think ${topic} is important for English learners to know about and understand?` });
-  lines.push({ speaker: 'guest', text: `That's an excellent question, Sarah. I believe that ${topic} is not just about learning words and phrases — it's about understanding a part of everyday life. When you learn about ${topic}, you learn how people think, how they live, and what matters to them. It makes the language come alive.` });
+  // === WELCOME (8 lines) ===
+  lines.push({ speaker: 'host', text: `Hello everyone and welcome to the English Learning Podcast! I'm your host Sarah, and today we have a very interesting topic to discuss: ${topic}. I'm joined by our regular guest Mark, who is here to share his knowledge and experience with us. Welcome to the show, Mark!` });
+  lines.push({ speaker: 'guest', text: `Thank you so much Sarah! It's always a pleasure to be here on the podcast. I'm really excited about today's topic because ${topic} is something that affects all of us in our daily lives. I've been looking forward to this conversation for a while now!` });
+  lines.push({ speaker: 'host', text: `That's wonderful to hear! Before we start our discussion, I'd like to ask you a question. In your opinion, why is ${topic} so important for English learners to understand and talk about? I think our listeners would really benefit from your perspective on this.` });
+  lines.push({ speaker: 'guest', text: `That's a great question to start with, Sarah. You know, when I think about ${topic}, I realize that it's not just a subject we study in textbooks. It's something that we experience every single day in our lives. Understanding ${topic} helps learners connect with the language on a much deeper level and makes their English more natural and fluent.` });
 
-  // Main discussion using story sentences
-  const useSentences = sentences.slice(0, count);
-  useSentences.forEach((s, i) => {
-    if (s.trim().length > 8) {
-      const speaker = i % 2 === 0 ? 'guest' : 'host';
-      lines.push({ speaker, text: s.trim() + ' This is really important because it helps us understand the bigger picture of our topic today.' });
-      const nextSpeaker = speaker === 'host' ? 'guest' : 'host';
-      if (i % 3 === 0) {
-        lines.push({ speaker: nextSpeaker, text: `That's a very interesting point you just made! Can you tell us more about that? I think our listeners would really benefit from hearing more details about this specific aspect.` });
-      } else if (i % 3 === 1) {
-        lines.push({ speaker: nextSpeaker, text: `I completely agree with what you're saying. This connects perfectly with what we talked about earlier. Would you like to share a personal example or experience related to this?` });
-      } else {
-        lines.push({ speaker: nextSpeaker, text: `That's fascinating! You know, many of our listeners might be wondering about this exact thing. Could you explain in more detail how this works in real life?` });
+  // === MAIN DISCUSSION ===
+  if (sentences.length > 0) {
+    lines.push({ speaker: 'host', text: `Let me ask you specifically about something related to ${topic}. I've been reading about this topic and I find it absolutely fascinating. What would you say is the most important thing to know about ${topic} for someone who is just starting to learn about it?` });
+    lines.push({ speaker: 'guest', text: `That's an excellent question, Sarah! Let me share my thoughts on this. When it comes to ${topic}, I believe the most important thing is to understand how it connects to everyday situations. For example, think about how ${topic} appears in your morning routine, your work life, and your conversations with friends. It's everywhere once you start noticing it!` });
+
+    // Deep discussion for each sentence
+    sentences.slice(0, level === 'A1' ? 5 : level === 'A2' ? 7 : level === 'B1' ? 10 : level === 'B2' ? 14 : 18).forEach((s, i) => {
+      if (s.trim().length > 5) {
+        lines.push({ speaker: i % 2 === 0 ? 'host' : 'guest', text: `Let's talk about another aspect of ${topic}. ${s.trim()}. This is something that I think really illustrates the point we're discussing today. What are your thoughts on this particular aspect?` });
+        lines.push({ speaker: i % 2 === 0 ? 'guest' : 'host', text: `I'm glad you brought that up! This is actually a perfect example of what we've been talking about. When we look at this more closely, we can see how it relates to the bigger picture of ${topic}. Let me explain in more detail what I mean by this, because I think it's really important for our listeners to understand.` });
+        lines.push({ speaker: i % 2 === 0 ? 'host' : 'guest', text: `That's a very insightful explanation! Can you give our listeners some practical advice about how they can apply this knowledge in their own lives? I think practical examples are always very helpful for learning.` });
+        lines.push({ speaker: i % 2 === 0 ? 'guest' : 'host', text: `Of course! I'd be happy to share some practical advice. The best way to understand this is to start paying attention to how ${topic} shows up in your daily routine. Try to notice it, write down new words and expressions related to it, and practice using them in your conversations. The more you practice, the more natural it will become!` });
       }
-    }
-  });
+    });
+  } else {
+    // If no sentences, generate discussion from topic
+    const discussionPoints = [
+      `Let's start by talking about what ${topic} means in our everyday lives. This is something that everyone can relate to, and I think it's a great starting point for our conversation today.`,
+      `That's really interesting! Can you share some personal experiences related to ${topic}? I always find that personal stories make the learning process much more engaging and memorable for our listeners.`,
+      `I completely agree with what you just said. Building on that point, I'd like to ask you how ${topic} might be different in various cultures around the world. This cross-cultural perspective is very valuable for English learners.`,
+      `Thank you for sharing those insights! Now, let's talk about some useful vocabulary words and expressions that are commonly used when discussing ${topic}. This will be very practical for our listeners who want to expand their English vocabulary.`,
+      `Those are excellent words to know! Can you explain how learners can practice using these words in real conversations? I think practical usage tips are always the most helpful part of our discussions.`,
+      `That's very helpful advice! Let me ask you one more question before we wrap up. What do you think is the most common mistake that English learners make when talking about ${topic}, and how can they avoid it?`
+    ];
+    discussionPoints.forEach((text, i) => {
+      lines.push({ speaker: i % 2 === 0 ? 'host' : 'guest', text });
+      lines.push({ speaker: i % 2 === 0 ? 'guest' : 'host', text: `That's a great point! I want to add something to what I just said. When it comes to ${topic}, I think it's really important to practice regularly and not be afraid of making mistakes. Every mistake is an opportunity to learn and improve your English skills. The key is to keep practicing and stay motivated!` });
+    });
+  }
 
-  // Wrap up
-  lines.push({ speaker: 'host', text: `Wow, Mark, thank you so much for this wonderful and detailed conversation about ${topic}. I feel like we've covered so much interesting ground today, and I'm sure our listeners learned a lot of new things.` });
-  lines.push({ speaker: 'guest', text: `Thank you, Sarah, for having me on your show! I really enjoyed this conversation. ${topic} is so rich and there's always more to explore and discuss. I hope everyone listening found this helpful for their English learning journey.` });
-  lines.push({ speaker: 'host', text: `That's all for today's episode of English Learning Podcast. We hope you enjoyed our discussion about ${topic}. Keep practicing, keep learning, and we'll see you in the next episode!` });
-  lines.push({ speaker: 'guest', text: `Yes, don't forget to practice what you learned today. Read the story, try to use the new vocabulary in your own sentences, and most importantly, enjoy the process of learning English. See you all next time!` });
+  // === WRAP UP (8 lines) ===
+  lines.push({ speaker: 'host', text: `Well, Mark, we've covered so many interesting aspects of ${topic} today! I want to thank you for sharing your knowledge and experience with us. I think our listeners have learned a tremendous amount from this conversation.` });
+  lines.push({ speaker: 'guest', text: `Thank you so much for having me, Sarah! I always enjoy our conversations because we get to explore topics in depth and help people improve their English. ${topic} is such a rich subject and we've only scratched the surface today.` });
+  lines.push({ speaker: 'host', text: `Before we say goodbye, let me summarize the key points we discussed today about ${topic}. First, we talked about what it means in everyday life. Then we explored specific examples and practical advice. And finally, we discussed some useful vocabulary. I hope all of this was helpful for our listeners!` });
+  lines.push({ speaker: 'guest', text: `That's a perfect summary, Sarah! I'd also like to encourage all of our listeners to practice what they learned today. Try to use the new vocabulary in your conversations, read the lesson story again, and most importantly, enjoy the process of learning English. It's a journey, not a destination!` });
+  lines.push({ speaker: 'host', text: `Those are wise words, Mark! Alright everyone, that brings us to the end of today's episode of the English Learning Podcast. We hope you enjoyed our detailed discussion about ${topic} and found it useful for your English learning journey.` });
+  lines.push({ speaker: 'guest', text: `It was a pleasure being here, and I hope to see you all again in our next episode. Remember, the key to improving your English is consistent practice and staying curious about the world around you. Keep learning, keep growing!` });
+  lines.push({ speaker: 'host', text: `Thank you for listening, and don't forget to check the lesson materials including the story, vocabulary list, and practice exercises. They are designed to help you reinforce what you learned today. See you in the next episode!` });
+  lines.push({ speaker: 'guest', text: `Goodbye everyone, and happy learning! Remember that every new word you learn brings you one step closer to fluency. Practice a little bit every day, and you will see amazing progress. Take care and see you soon!` });
 
   return lines;
 }
