@@ -444,23 +444,27 @@ function playPodcast() {
   speakNextPodcastSentence();
 }
 
-function getVoiceByGender(gender) {
+let podcastFemaleVoice = null;
+let podcastMaleVoice = null;
+
+function initPodcastVoices() {
   const voices = speechSynthesis.getVoices();
   const enVoices = voices.filter(v => v.lang.startsWith('en'));
-  if (enVoices.length === 0) return null;
-  // Female: prefer Zira, then any voice with female name keywords
-  const femaleKeys = ['zira', 'female', 'woman', 'girl', 'samantha', 'victoria', 'karen', 'hazel', 'catherine', 'linda', 'susan'];
-  // Male: prefer David, Mark, then any voice with male name keywords
-  const maleKeys = ['david', 'mark', 'male', 'man', 'boy', 'james', 'john', 'george', 'paul', 'daniel', 'richard'];
-  const keys = gender === 'female' ? femaleKeys : maleKeys;
-  for (const key of keys) {
-    const found = enVoices.find(v => v.name.toLowerCase().includes(key));
-    if (found) return found;
+  if (enVoices.length === 0) return;
+  const femaleNames = ['zira', 'female', 'woman', 'girl', 'samantha', 'victoria', 'karen', 'hazel', 'catherine', 'linda', 'susan'];
+  const maleNames = ['david', 'mark', 'male', 'man', 'boy', 'james', 'john', 'george', 'paul', 'daniel', 'richard'];
+  podcastFemaleVoice = null;
+  podcastMaleVoice = null;
+  for (const name of femaleNames) {
+    const f = enVoices.find(v => v.name.toLowerCase().includes(name));
+    if (f) { podcastFemaleVoice = f; break; }
   }
-  // Fallback: return a different voice to avoid same voice for both
-  const defaultVoice = enVoices[0];
-  const altVoice = enVoices.length > 1 ? enVoices[1] : defaultVoice;
-  return gender === 'female' ? defaultVoice : altVoice;
+  for (const name of maleNames) {
+    const m = enVoices.find(v => v.name.toLowerCase().includes(name));
+    if (m) { podcastMaleVoice = m; break; }
+  }
+  if (!podcastFemaleVoice) podcastFemaleVoice = enVoices[0];
+  if (!podcastMaleVoice) podcastMaleVoice = enVoices.length > 1 ? enVoices[1] : enVoices[0];
 }
 
 function speakNextPodcastSentence() {
@@ -471,17 +475,19 @@ function speakNextPodcastSentence() {
 
   const sentence = podcastSentences[podcastSentenceIndex];
   const speaker = podcastSpeakers[podcastSentenceIndex] || 'host';
+  const isFemale = speaker === 'host';
+
   podcastUtterance = new SpeechSynthesisUtterance(sentence);
   podcastUtterance.lang = 'en-US';
-  podcastUtterance.rate = parseFloat(document.getElementById('podcast-speed').value) || 1;
+  podcastUtterance.rate = (parseFloat(document.getElementById('podcast-speed').value) || 0.75) * (isFemale ? 1 : 0.85);
+  podcastUtterance.pitch = isFemale ? 1.3 : 0.7;
 
-  const voice = getVoiceByGender(speaker === 'host' ? 'female' : 'male');
-  if (voice) podcastUtterance.voice = voice;
-  podcastUtterance.pitch = speaker === 'host' ? 1.1 : 0.9;
+  if (isFemale && podcastFemaleVoice) podcastUtterance.voice = podcastFemaleVoice;
+  else if (!isFemale && podcastMaleVoice) podcastUtterance.voice = podcastMaleVoice;
 
   podcastUtterance.onend = () => {
     podcastSentenceIndex++;
-    setTimeout(speakNextPodcastSentence, 300);
+    setTimeout(speakNextPodcastSentence, 400);
     updatePodcastTimer();
   };
 
@@ -556,6 +562,7 @@ function speakWord(word) {
 }
 
 function populateVoices() {
+  initPodcastVoices();
   const select = document.getElementById('voice-select');
   if (!select) return;
   if (speechSynthesis.getVoices().length === 0) {
