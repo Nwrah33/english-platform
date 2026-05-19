@@ -358,60 +358,53 @@ function getArabicDict() {
 function generatePodcastFromStory(story, topic, levelId) {
   const level = levelId || 'A1';
   const sentences = story.split(/[.!?]+/).filter(s => s.trim().length > 10);
-  const sentenceCount = level === 'A1' ? 4 : level === 'A2' ? 6 : level === 'B1' ? 8 : level === 'B2' ? 10 : 12;
+  const sentenceCount = level === 'A1' ? 8 : level === 'A2' ? 10 : level === 'B1' ? 14 : level === 'B2' ? 18 : 22;
+
+  const hostIntro = { A1: `Hello and welcome! Today we talk about: ${topic}. I'm so excited!`, A2: `Hello everyone! Today's topic is ${topic}. Let's dive in!`, B1: `Welcome to English Learning Podcast. Today we discuss: ${topic} in detail.`, B2: `Welcome back to English Learning Podcast. Today's in-depth topic: ${topic}.`, C1: `Welcome to Advanced English Discussions. Today we analyze: ${topic}.`, C2: `Welcome to Mastery English. Today's sophisticated topic: ${topic}.` };
+  const guestIntro = { A1: `Hi! I'm happy to be here. Let's learn about ${topic} together!`, A2: `Hi everyone! I'd love to share my thoughts about ${topic}.`, B1: `Thanks for having me. ${topic} is very useful for intermediate learners.`, B2: `Thank you! ${topic} offers many interesting angles for discussion.`, C1: `Pleasure to be here. ${topic} requires nuanced understanding.`, C2: `Honored to join. ${topic} is a fascinating subject with deep implications.` };
+
+  const hostReplies = { A1: [`That's wonderful! Tell me more!`, `Wow! I didn't know that!`, `Interesting! Please continue!`, `Great point! What else?`, `Amazing! Keep going!`],
+    A2: [`That's interesting! Can you elaborate?`, `I see! What else can you share?`, `Good point! Tell us more.`, `Fascinating! Go on.`, `Great! Anything else to add?`],
+    B1: [`Excellent perspective. Could you explain further?`, `That's a valid point. Why do you think so?`, `Interesting take. What's your reasoning?`, `I agree. Can you expand on that?`],
+    B2: [`That's a great observation. How does this relate?`, `Insightful. What are the implications?`, `Well said. Can you contrast that with another view?`, `Excellent analysis. What's your conclusion?`],
+    C1: [`Profound insight. What evidence supports this?`, `Elegantly stated. How would you critique this?`, `Thought-provoking. What are the counterarguments?`, `Nuanced perspective. How does this integrate with broader themes?`],
+    C2: [`Sophisticated analysis. What theoretical framework applies?`, `Brilliant. How does this compare to alternative paradigms?`, `Excellent synthesis. What are the long-term ramifications?`, `Deep insight. How does this challenge conventional wisdom?`] };
+
+  const guestReplies = { A1: [`That's a good question!`, `Let me think...`, `I can explain!`, `Here's what I know.`],
+    A2: [`Let me share more details.`, `Great question! Here's what I think.`, `I'd be happy to explain!`, `Good question! Let me elaborate.`],
+    B1: [`Let me elaborate on that.`, `I'm glad you asked. Here's my perspective.`, `That's exactly the right question.`, `Let me clarify with an example.`],
+    B2: [`I'd like to expand on that point.`, `That's precisely the issue. Let me explain.`, `An excellent question. Here's my analysis.`, `Let me provide more context.`],
+    C1: [`Let me deconstruct this further.`, `An incisive question. Here's my detailed analysis.`, `I appreciate that inquiry. Let me elucidate.`, `Let me examine this from multiple angles.`],
+    C2: [`Let me dissect this with greater precision.`, `A crucial question. Here's a comprehensive analysis.`, `Let me explore this through multiple theoretical lenses.`, `I shall address this with the nuance it deserves.`] };
+
+  let replyIdx = 0;
 
   let podcastLines = [];
 
-  if (level === 'A1') {
-    podcastLines.push({ speaker: 'host', text: `Hello and welcome! Today we talk about: ${topic}.` });
-    podcastLines.push({ speaker: 'guest', text: `Hi! I'm happy to be here. Let's learn about ${topic}.` });
-    sentences.slice(0, sentenceCount).forEach((s, i) => {
-      if (s.trim()) {
-        podcastLines.push({ speaker: i % 2 === 0 ? 'host' : 'guest', text: s.trim() + '.' });
-        podcastLines.push({ speaker: i % 2 === 0 ? 'guest' : 'host', text: `Good! Tell me more.` });
-      }
-    });
-  } else if (level === 'A2') {
-    podcastLines.push({ speaker: 'host', text: `Hello everyone! Today's topic is ${topic}.` });
-    podcastLines.push({ speaker: 'guest', text: `Hi! I'd like to share my thoughts about ${topic}.` });
-    sentences.slice(0, sentenceCount).forEach((s, i) => {
-      if (s.trim()) {
-        podcastLines.push({ speaker: i % 2 === 0 ? 'host' : 'guest', text: s.trim() + '.' });
-        podcastLines.push({ speaker: i % 2 === 0 ? 'guest' : 'host', text: `That's interesting! What else can you say?` });
-      }
-    });
-  } else if (level === 'B1') {
-    podcastLines.push({ speaker: 'host', text: `Welcome to English Learning Podcast. Today we discuss: ${topic}.` });
-    podcastLines.push({ speaker: 'guest', text: `Thanks for having me. ${topic} is very useful for intermediate learners.` });
-    sentences.slice(0, sentenceCount).forEach((s, i) => {
-      if (s.trim()) {
-        podcastLines.push({ speaker: i % 2 === 0 ? 'host' : 'guest', text: s.trim() + '.' });
-        podcastLines.push({ speaker: i % 2 === 0 ? 'guest' : 'host', text: `Excellent perspective. Could you explain further?` });
-      }
-    });
-  } else if (level === 'B2') {
-    podcastLines.push({ speaker: 'host', text: `Welcome back to English Learning Podcast. Today's in-depth topic: ${topic}.` });
-    podcastLines.push({ speaker: 'guest', text: `Thank you! ${topic} offers many interesting angles for upper-intermediate discussion.` });
-    sentences.slice(0, sentenceCount).forEach((s, i) => {
-      if (s.trim()) {
-        podcastLines.push({ speaker: i % 2 === 0 ? 'host' : 'guest', text: s.trim() + '.' });
-        podcastLines.push({ speaker: i % 2 === 0 ? 'guest' : 'host', text: `That's a great observation. How does this relate to the broader context?` });
-      }
-    });
-  } else {
-    // C1 and C2
-    podcastLines.push({ speaker: 'host', text: `Welcome to Advanced English Discussions. Today we analyze: ${topic}.` });
-    podcastLines.push({ speaker: 'guest', text: `Pleasure to be here. ${topic} is a sophisticated subject requiring nuanced understanding.` });
-    sentences.slice(0, sentenceCount).forEach((s, i) => {
-      if (s.trim()) {
-        podcastLines.push({ speaker: i % 2 === 0 ? 'host' : 'guest', text: s.trim() + '.' });
-        podcastLines.push({ speaker: i % 2 === 0 ? 'guest' : 'host', text: `Fascinating. Could you provide more detailed analysis on this aspect?` });
-      }
-    });
-  }
+  // Welcome segment (4-6 lines)
+  podcastLines.push({ speaker: 'host', text: hostIntro[level] || hostIntro['A1'] });
+  podcastLines.push({ speaker: 'guest', text: guestIntro[level] || guestIntro['A1'] });
+  podcastLines.push({ speaker: 'host', text: `So, let me ask you: what do you think about ${topic}?` });
+  podcastLines.push({ speaker: 'guest', text: `Well, I think ${topic} is very important for us to understand. Let me share my experience.` });
 
-  podcastLines.push({ speaker: 'host', text: `Thank you for listening to our podcast about ${topic}. Keep practicing!` });
-  podcastLines.push({ speaker: 'guest', text: `Yes, practice makes perfect. See you next time!` });
+  // Story discussion (use all available sentences)
+  const useSentences = sentences.slice(0, sentenceCount);
+  useSentences.forEach((s, i) => {
+    if (s.trim()) {
+      const sp = i % 2 === 0 ? 'guest' : 'host';
+      podcastLines.push({ speaker: sp, text: s.trim() + '.' });
+      const replies = sp === 'host' ? guestReplies : hostReplies;
+      const arr = replies[level] || replies['A1'];
+      podcastLines.push({ speaker: sp === 'host' ? 'guest' : 'host', text: arr[replyIdx % arr.length] });
+      replyIdx++;
+    }
+  });
+
+  // Wrap up (4 lines)
+  podcastLines.push({ speaker: 'host', text: `This has been a wonderful conversation about ${topic}.` });
+  podcastLines.push({ speaker: 'guest', text: `I really enjoyed discussing ${topic} with you today.` });
+  podcastLines.push({ speaker: 'host', text: `Thank you for listening to our podcast. Keep practicing your English!` });
+  podcastLines.push({ speaker: 'guest', text: `Yes, keep learning and improving. See you next time!` });
 
   return podcastLines;
 }
@@ -540,7 +533,7 @@ async function speakNextPodcastSentence() {
   document.querySelectorAll('.podcast-line').forEach(el => { el.style.background = ''; el.style.fontWeight = '400'; });
   podcastSentenceIndex++;
   updatePodcastTimer();
-  if (isPodcastPlaying) setTimeout(speakNextPodcastSentence, 700);
+  if (isPodcastPlaying) setTimeout(speakNextPodcastSentence, 4000);
 }
 
 function stopPodcast() {
