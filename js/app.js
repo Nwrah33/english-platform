@@ -451,10 +451,15 @@ function initPodcastVoices() {
   const voices = speechSynthesis.getVoices();
   const enVoices = voices.filter(v => v.lang.startsWith('en'));
   if (enVoices.length === 0) return;
+
+  // Try to find female voice (Zira, etc.)
   const femaleNames = ['zira', 'female', 'woman', 'girl', 'samantha', 'victoria', 'karen', 'hazel', 'catherine', 'linda', 'susan'];
+  // Try to find male voice (David, Mark, etc.)
   const maleNames = ['david', 'mark', 'male', 'man', 'boy', 'james', 'john', 'george', 'paul', 'daniel', 'richard'];
+
   podcastFemaleVoice = null;
   podcastMaleVoice = null;
+
   for (const name of femaleNames) {
     const f = enVoices.find(v => v.name.toLowerCase().includes(name));
     if (f) { podcastFemaleVoice = f; break; }
@@ -463,8 +468,21 @@ function initPodcastVoices() {
     const m = enVoices.find(v => v.name.toLowerCase().includes(name));
     if (m) { podcastMaleVoice = m; break; }
   }
+
+  // Assign voices - try to get at least 2 different ones
   if (!podcastFemaleVoice) podcastFemaleVoice = enVoices[0];
-  if (!podcastMaleVoice) podcastMaleVoice = enVoices.length > 1 ? enVoices[1] : enVoices[0];
+  if (!podcastMaleVoice) {
+    // Pick the last English voice for male (might be different from female)
+    podcastMaleVoice = enVoices[enVoices.length - 1];
+    // If it's the same voice, try to find any different voice
+    if (podcastMaleVoice.name === podcastFemaleVoice.name && enVoices.length > 1) {
+      podcastMaleVoice = enVoices[1];
+    }
+  }
+
+  console.log('🎙️ Female voice:', podcastFemaleVoice?.name);
+  console.log('🎙️ Male voice:', podcastMaleVoice?.name);
+  console.log('🎙️ All English voices:', enVoices.map(v => v.name));
 }
 
 function speakNextPodcastSentence() {
@@ -479,8 +497,10 @@ function speakNextPodcastSentence() {
 
   podcastUtterance = new SpeechSynthesisUtterance(sentence);
   podcastUtterance.lang = 'en-US';
-  podcastUtterance.rate = (parseFloat(document.getElementById('podcast-speed').value) || 0.75) * (isFemale ? 1 : 0.85);
-  podcastUtterance.pitch = isFemale ? 1.3 : 0.7;
+  const baseRate = parseFloat(document.getElementById('podcast-speed').value) || 0.75;
+  podcastUtterance.rate = isFemale ? baseRate : baseRate * 0.75;
+  podcastUtterance.pitch = isFemale ? 1.4 : 0.6;
+  podcastUtterance.volume = 1;
 
   if (isFemale && podcastFemaleVoice) podcastUtterance.voice = podcastFemaleVoice;
   else if (!isFemale && podcastMaleVoice) podcastUtterance.voice = podcastMaleVoice;
