@@ -426,6 +426,48 @@ function getPodcastText(podcastLines) {
   return podcastLines.map(l => `${l.speaker === 'host' ? 'H:' : 'G:'} ${l.text}`).join('\n');
 }
 
+let ambientAudioCtx = null;
+let ambientInterval = null;
+
+function startAmbient() {
+  try {
+    ambientAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // Gentle birds chirping every 2-4 seconds
+    ambientInterval = setInterval(() => {
+      if (!ambientAudioCtx) return;
+      const osc = ambientAudioCtx.createOscillator();
+      const gain = ambientAudioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(ambientAudioCtx.destination);
+      osc.frequency.value = 3000 + Math.random() * 2000;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.02, ambientAudioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ambientAudioCtx.currentTime + 0.15);
+      osc.start(ambientAudioCtx.currentTime);
+      osc.stop(ambientAudioCtx.currentTime + 0.15);
+    }, 2500 + Math.random() * 1500);
+  } catch (e) {}
+}
+
+function stopAmbient() {
+  if (ambientInterval) { clearInterval(ambientInterval); ambientInterval = null; }
+  if (ambientAudioCtx) { ambientAudioCtx.close().catch(() => {}); ambientAudioCtx = null; }
+}
+
+async function callAITTS(text, voice) {
+  const key = getApiKey();
+  if (!key) return null;
+  try {
+    const res = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'tts-1', input: text, voice, response_format: 'mp3' })
+    });
+    if (!res.ok) return null;
+    return await res.blob();
+  } catch (e) { return null; }
+}
+
 function playPodcast() {
   if (podcastSentences.length === 0) { alert('لا يوجد نص بودكاست.'); return; }
 
@@ -441,7 +483,56 @@ function playPodcast() {
   document.getElementById('podcast-play-btn').textContent = '⏸️';
   document.querySelector('.podcast-wave').classList.remove('paused');
 
-  speakNextPodcastSentence();
+  // Try AI voices first, fallback to speechSynthesis
+  if (getApiKey()) {
+    startAmbient();
+    playAIPodcast();
+  } else {
+    speakNextPodcastSentence();
+  }
+}
+
+async function playAIPodcast() {
+  while (podcastSentenceIndex < podcastSentences.length && isPodcastPlaying) {
+    const sentence = podcastSentences[podcastSentenceIndex];
+    const speaker = podcastSpeakers[podcastSentenceIndex] || 'host';
+    const voice = speaker === 'host' ? 'nova' : 'onyx'; // nova=female, onyx=male
+
+    // Highlight speaker
+    document.querySelectorAll('.podcast-line').forEach((el, i) => {
+      el.style.background = i === podcastSentenceIndex ? (speaker === 'host' ? '#e0e7ff' : '#fef9c3') : '';
+      el.style.fontWeight = i === podcastSentenceIndex ? '700' : '400';
+    });
+
+    const blob = await callAITTS(sentence, voice);
+    if (blob && isPodcastPlaying) {
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      await new Promise(resolve => {
+        audio.onended = resolve;
+        audio.onerror = resolve;
+        audio.play().catch(resolve);
+      });
+      URL.revokeObjectURL(url);
+    } else {
+      // Fallback to speechSynthesis for this sentence
+      const utter = new SpeechSynthesisUtterance(sentence);
+      utter.lang = 'en-US';
+      utter.rate = 0.85;
+      utter.pitch = speaker === 'host' ? 1.3 : 0.7;
+      await new Promise(resolve => {
+        utter.onend = resolve;
+        utter.onerror = resolve;
+        speechSynthesis.speak(utter);
+      });
+    }
+
+    document.querySelectorAll('.podcast-line').forEach(el => { el.style.background = ''; el.style.fontWeight = '400'; });
+    podcastSentenceIndex++;
+    updatePodcastTimer();
+    if (isPodcastPlaying) await new Promise(r => setTimeout(r, 400));
+  }
+  stopPodcast();
 }
 
 let podcastFemaleVoice = null;
@@ -526,6 +617,7 @@ function stopPodcast() {
   if (speechSynthesis.speaking) speechSynthesis.cancel();
   isPodcastPlaying = false;
   podcastUtterance = null;
+  stopAmbient();
   const btn = document.getElementById('podcast-play-btn');
   if (btn) btn.textContent = '▶️';
   const wave = document.querySelector('.podcast-wave');
