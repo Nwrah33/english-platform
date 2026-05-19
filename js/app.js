@@ -426,26 +426,32 @@ function getPodcastText(podcastLines) {
   return podcastLines.map(l => `${l.speaker === 'host' ? 'H:' : 'G:'} ${l.text}`).join('\n');
 }
 
-let ambientAudioCtx = null;
+let audioCtx = null;
 let ambientInterval = null;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
 
 function startAmbient() {
   try {
-    ambientAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getAudioCtx();
     function chirp() {
-      if (!ambientAudioCtx || !isPodcastPlaying) return;
-      const osc = ambientAudioCtx.createOscillator();
-      const gain = ambientAudioCtx.createGain();
+      if (!isPodcastPlaying) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
       osc.connect(gain);
-      gain.connect(ambientAudioCtx.destination);
+      gain.connect(ctx.destination);
       osc.frequency.value = 2500 + Math.random() * 2000;
       osc.type = 'sine';
-      const now = ambientAudioCtx.currentTime;
-      gain.gain.setValueAtTime(0.015, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      const now = ctx.currentTime;
+      gain.gain.setValueAtTime(0.012, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
       osc.start(now);
-      osc.stop(now + 0.12);
-      ambientInterval = setTimeout(chirp, 3000 + Math.random() * 3000);
+      osc.stop(now + 0.1);
+      ambientInterval = setTimeout(chirp, 4000 + Math.random() * 3000);
     }
     chirp();
   } catch (e) {}
@@ -453,69 +459,44 @@ function startAmbient() {
 
 function stopAmbient() {
   if (ambientInterval) { clearInterval(ambientInterval); ambientInterval = null; }
-  if (ambientAudioCtx) { ambientAudioCtx.close().catch(() => {}); ambientAudioCtx = null; }
+}
+
+// OpenAI TTS via Web Audio API (more reliable on mobile)
+async function speakWithAI(text, voiceName) {
+  const key = getApiKey();
+  if (!key) return false;
+  try {
+    const res = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'tts-1', input: text, voice: voiceName, response_format: 'mp3' })
+    });
+    if (!res.ok) return false;
+    const blob = await res.blob();
+    const buf = await blob.arrayBuffer();
+    const ctx = getAudioCtx();
+    const audioBuf = await ctx.decodeAudioData(buf);
+    const source = ctx.createBufferSource();
+    source.buffer = audioBuf;
+    source.connect(ctx.destination);
+    source.start();
+    return new Promise(resolve => { source.onended = resolve; });
+  } catch (e) { return false; }
 }
 
 function playPodcast() {
   if (podcastSentences.length === 0) { alert('لا يوجد نص بودكاست.'); return; }
-  if (isPodcastPlaying) { speechSynthesis.resume(); return; }
+  if (isPodcastPlaying) { if (speechSynthesis.speaking) speechSynthesis.resume(); return; }
   stopPodcast();
   podcastSentenceIndex = 0;
   isPodcastPlaying = true;
   document.getElementById('podcast-play-btn').textContent = '⏸️';
   document.querySelector('.podcast-wave').classList.remove('paused');
   startAmbient();
-  setTimeout(speakNextPodcastSentence, 800);
-}
-
-let podcastFemaleVoice = null;
-let podcastMaleVoice = null;
-
-function getVoiceByGender(gender) {
-  const voices = speechSynthesis.getVoices();
-  const enVoices = voices.filter(v => v.lang.startsWith('en'));
-  if (enVoices.length === 0) return null;
-  const femaleKeys = ['zira', 'female', 'woman', 'girl', 'samantha', 'victoria', 'karen', 'hazel', 'catherine', 'linda', 'susan'];
-  const maleKeys = ['david', 'mark', 'male', 'man', 'boy', 'james', 'john', 'george', 'paul', 'daniel', 'richard'];
-  const keys = gender === 'female' ? femaleKeys : maleKeys;
-  for (const key of keys) {
-    const found = enVoices.find(v => v.name.toLowerCase().includes(key));
-    if (found) return found;
-  }
-  return gender === 'female' ? enVoices[0] : (enVoices.length > 1 ? enVoices[1] : enVoices[0]);
-}
-
-function initPodcastVoices() {
-  const voices = speechSynthesis.getVoices();
-  const enVoices = voices.filter(v => v.lang.startsWith('en'));
-  if (enVoices.length === 0) return;
-
-  const femaleNames = ['zira', 'female', 'woman', 'girl', 'samantha', 'victoria', 'karen', 'hazel', 'catherine', 'linda', 'susan'];
-  const maleNames = ['david', 'mark', 'male', 'man', 'boy', 'james', 'john', 'george', 'paul', 'daniel', 'richard'];
-
-  podcastFemaleVoice = null;
-  podcastMaleVoice = null;
-
-  for (const name of femaleNames) {
-    const f = enVoices.find(v => v.name.toLowerCase().includes(name));
-    if (f) { podcastFemaleVoice = f; break; }
-  }
-  for (const name of maleNames) {
-    const m = enVoices.find(v => v.name.toLowerCase().includes(name));
-    if (m) { podcastMaleVoice = m; break; }
-  }
-
-  if (!podcastFemaleVoice) podcastFemaleVoice = enVoices[0];
-  if (!podcastMaleVoice) {
-    podcastMaleVoice = enVoices[enVoices.length - 1];
-    if (podcastMaleVoice.name === podcastFemaleVoice.name && enVoices.length > 1) {
-      podcastMaleVoice = enVoices[1];
-    }
-  }
-
-  console.log('🎙️ Female voice:', podcastFemaleVoice?.name);
-  console.log('🎙️ Male voice:', podcastMaleVoice?.name);
-  console.log('🎙️ All English voices:', enVoices.map(v => `${v.name} (${v.lang})`));
+  // Show available voices for debugging
+  const voices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'));
+  console.log('📢 Available English voices:', voices.map(v => `${v.name} (${v.lang})`));
+  speakNextPodcastSentence();
 }
 
 function speakNextPodcastSentence() {
@@ -524,41 +505,58 @@ function speakNextPodcastSentence() {
     return;
   }
 
-  if (!podcastFemaleVoice && !podcastMaleVoice) initPodcastVoices();
-
   const sentence = podcastSentences[podcastSentenceIndex];
   const speaker = podcastSpeakers[podcastSentenceIndex] || 'host';
   const isFemale = speaker === 'host';
+  const aiVoice = isFemale ? 'nova' : 'onyx';
 
   document.querySelectorAll('.podcast-line').forEach((el, i) => {
     el.style.background = i === podcastSentenceIndex ? (isFemale ? '#e0e7ff' : '#fef9c3') : '';
     el.style.fontWeight = i === podcastSentenceIndex ? '700' : '400';
   });
 
-  podcastUtterance = new SpeechSynthesisUtterance(sentence);
-  podcastUtterance.lang = 'en-US';
-  const baseRate = parseFloat(document.getElementById('podcast-speed').value) || 0.75;
-  podcastUtterance.rate = isFemale ? baseRate : baseRate * 0.6;
-  podcastUtterance.pitch = isFemale ? 1.5 : 0.5;
-  podcastUtterance.volume = 1;
-
-  const voice = getVoiceByGender(isFemale ? 'female' : 'male');
-  if (voice) podcastUtterance.voice = voice;
-
-  podcastUtterance.onend = () => {
-    document.querySelectorAll('.podcast-line').forEach(el => { el.style.background = ''; el.style.fontWeight = '400'; });
-    podcastSentenceIndex++;
-    setTimeout(speakNextPodcastSentence, 700);
+  const infoEl = document.getElementById('podcast-voice-info');
+  // Try AI TTS first
+  speakWithAI(sentence, aiVoice).then(success => {
+    if (infoEl) infoEl.textContent = success ? `🤖 ${isFemale ? 'nova (امرأة)' : 'onyx (رجل)'}` : `🔊 ${isFemale ? 'صوت افتراضي' : 'صوت بديل'}`;
+    if (!isPodcastPlaying) return;
+    if (!success) {
+      // Fallback: speechSynthesis with best available voice
+      const voices = speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'));
+      const utter = new SpeechSynthesisUtterance(sentence);
+      utter.lang = 'en-US';
+      const baseRate = parseFloat(document.getElementById('podcast-speed').value) || 0.75;
+      utter.rate = isFemale ? baseRate : baseRate * 0.7;
+      utter.pitch = isFemale ? 1.3 : 0.8;
+      // Find best voice match
+      if (isFemale) {
+        const f = voices.find(v => /zira|female|samantha|victoria|karen/i.test(v.name)) || voices[0];
+        if (f) utter.voice = f;
+      } else {
+        const m = voices.find(v => /david|mark|male|james|john/i.test(v.name)) || (voices.length > 1 ? voices[1] : voices[0]);
+        if (m) utter.voice = m;
+      }
+      utter.onend = () => {
+        if (isPodcastPlaying) { podcastSentenceIndex++; setTimeout(speakNextPodcastSentence, 700); updatePodcastTimer(); }
+        else stopPodcast();
+      };
+      utter.onerror = () => {
+        if (isPodcastPlaying) { podcastSentenceIndex++; setTimeout(speakNextPodcastSentence, 500); updatePodcastTimer(); }
+      };
+      speechSynthesis.speak(utter);
+    } else {
+      // AI TTS succeeded - move to next after a pause
+      setTimeout(() => {
+        if (isPodcastPlaying) {
+          document.querySelectorAll('.podcast-line').forEach(el => { el.style.background = ''; el.style.fontWeight = '400'; });
+          podcastSentenceIndex++;
+          updatePodcastTimer();
+          setTimeout(speakNextPodcastSentence, 600);
+        }
+      }, 300);
+    }
     updatePodcastTimer();
-  };
-
-  podcastUtterance.onerror = () => {
-    podcastSentenceIndex++;
-    setTimeout(speakNextPodcastSentence, 500);
-  };
-
-  speechSynthesis.speak(podcastUtterance);
-  updatePodcastTimer();
+  });
 }
 
 function stopPodcast() {
