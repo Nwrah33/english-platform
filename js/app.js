@@ -447,32 +447,33 @@ function getPodcastText(podcastLines) {
   return podcastLines.map(l => `${l.speaker === 'host' ? 'H:' : 'G:'} ${l.text}`).join('\n');
 }
 
-let audioCtx = null;
+let podcastAudioCtx = null;
+let ambientCtx = null;
 let ambientInterval = null;
 
 function getAudioCtx() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
-  return audioCtx;
+  if (!podcastAudioCtx) podcastAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (podcastAudioCtx.state === 'suspended') podcastAudioCtx.resume();
+  return podcastAudioCtx;
 }
 
 function startAmbient() {
   try {
-    const ctx = getAudioCtx();
+    ambientCtx = new (window.AudioContext || window.webkitAudioContext)();
     function chirp() {
-      if (!isPodcastPlaying) return;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+      if (!isPodcastPlaying || !ambientCtx) return;
+      const osc = ambientCtx.createOscillator();
+      const gain = ambientCtx.createGain();
       osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = 2500 + Math.random() * 2000;
+      gain.connect(ambientCtx.destination);
+      osc.frequency.value = 3000 + Math.random() * 2000;
       osc.type = 'sine';
-      const now = ctx.currentTime;
-      gain.gain.setValueAtTime(0.012, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      const now = ambientCtx.currentTime;
+      gain.gain.setValueAtTime(0.008, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
       osc.start(now);
-      osc.stop(now + 0.1);
-      ambientInterval = setTimeout(chirp, 4000 + Math.random() * 3000);
+      osc.stop(now + 0.08);
+      ambientInterval = setTimeout(chirp, 5000 + Math.random() * 3000);
     }
     chirp();
   } catch (e) {}
@@ -480,6 +481,7 @@ function startAmbient() {
 
 function stopAmbient() {
   if (ambientInterval) { clearInterval(ambientInterval); ambientInterval = null; }
+  if (ambientCtx) { ambientCtx.close().catch(() => {}); ambientCtx = null; }
 }
 
 async function speakWithAI(text, voiceName) {
