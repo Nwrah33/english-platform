@@ -231,11 +231,12 @@ async function openLesson(index) {
 
     // Podcast
     const podcastLines = generatePodcastFromStory(data.story, topic, currentLevel);
+    podcastSpeakers = podcastLines.map(l => l.speaker);
     const podcastEl = document.getElementById('podcast-text');
     if (podcastEl) {
       podcastEl.innerHTML = podcastLines.map(l =>
-        `<span class="podcast-speaker ${l.speaker}">${l.speaker === 'host' ? '🎙️ المقدم' : '🎤 الضيف'}</span>: ${l.text}`
-      ).join('<br>');
+        `<div class="podcast-line ${l.speaker}">${l.text}</div>`
+      ).join('');
     }
     const ptTitle = document.getElementById('podcast-title');
     if (ptTitle) ptTitle.textContent = `🎙️ بودكاست: ${topic}`;
@@ -381,10 +382,11 @@ function generatePodcastFromStory(story, topic, levelId) {
 let podcastUtterance = null;
 let podcastSentenceIndex = 0;
 let podcastSentences = [];
+let podcastSpeakers = []; // track speaker for each sentence
 let isPodcastPlaying = false;
 
 function getPodcastText(podcastLines) {
-  return podcastLines.map(l => `${l.speaker === 'host' ? '🎙️ Host' : '🎤 Guest'}: ${l.text}`).join('\n');
+  return podcastLines.map(l => `${l.speaker === 'host' ? 'H:' : 'G:'} ${l.text}`).join('\n');
 }
 
 function playPodcast() {
@@ -399,7 +401,12 @@ function playPodcast() {
   stopPodcast();
 
   const lines = text.split('\n').filter(l => l.trim());
-  podcastSentences = lines.map(l => l.replace(/^[🎙️🎤]+\s*(Host|Guest):\s*/, '').trim()).filter(l => l);
+  const sentences = lines.map(l => l.replace(/^[HG]:\s*/, '').trim()).filter(l => l);
+  podcastSentences = sentences;
+  // match speakers to lines (use stored speakers or fallback to alternating)
+  if (podcastSpeakers.length === 0) {
+    podcastSpeakers = podcastSentences.map((_, i) => i % 2 === 0 ? 'host' : 'guest');
+  }
   podcastSentenceIndex = 0;
 
   isPodcastPlaying = true;
@@ -409,6 +416,19 @@ function playPodcast() {
   speakNextPodcastSentence();
 }
 
+function getVoiceByGender(gender) {
+  const voices = speechSynthesis.getVoices();
+  const enVoices = voices.filter(v => v.lang.startsWith('en'));
+  if (enVoices.length === 0) return null;
+  if (gender === 'female') {
+    const f = enVoices.find(v => /female|woman|girl|samantha|victoria|karen|zira|microsoft\s*zira/i.test(v.name));
+    return f || enVoices[0];
+  } else {
+    const m = enVoices.find(v => /male|man|boy|david|james|john|mark|microsoft\s*david|google\s*us\s*english/i.test(v.name));
+    return m || (enVoices.length > 1 ? enVoices[1] : enVoices[0]);
+  }
+}
+
 function speakNextPodcastSentence() {
   if (podcastSentenceIndex >= podcastSentences.length) {
     stopPodcast();
@@ -416,13 +436,13 @@ function speakNextPodcastSentence() {
   }
 
   const sentence = podcastSentences[podcastSentenceIndex];
+  const speaker = podcastSpeakers[podcastSentenceIndex] || 'host';
   podcastUtterance = new SpeechSynthesisUtterance(sentence);
   podcastUtterance.lang = 'en-US';
   podcastUtterance.rate = parseFloat(document.getElementById('podcast-speed').value) || 1;
 
-  const voices = speechSynthesis.getVoices();
-  const enVoice = voices.find(v => v.lang.startsWith('en'));
-  if (enVoice) podcastUtterance.voice = enVoice;
+  const voice = getVoiceByGender(speaker === 'host' ? 'female' : 'male');
+  if (voice) podcastUtterance.voice = voice;
 
   podcastUtterance.onend = () => {
     podcastSentenceIndex++;
@@ -632,7 +652,8 @@ async function startVideoCall() {
   document.getElementById('call-end-btn').style.display = 'inline-block';
   updateCallStatus('🟢 المكالمة قيد التشغيل...', '');
 
-  const greeting = `Hello! I'm your AI teacher. Let's practice English conversation about our lesson topic. What do you think about the story?`;
+  const topic = (TOPICS[currentLevel] || [])[currentLesson] || 'this topic';
+  const greeting = `Hi there! I'm your English tutor. Let's talk about "${topic}". Can you tell me what you learned from the story in your own words?`;
   addCallBubble(greeting, 'bot');
 
   // Speak greeting
@@ -686,6 +707,9 @@ function startCallListening() {
 async function respondToCaller(msg) {
   const story = document.getElementById('listening-text')?.textContent || '';
   const apiKey = getApiKey();
+  const topic = (TOPICS[currentLevel] || [])[currentLesson] || '';
+  const data = getLessonData(currentLevel, currentLesson);
+  const vocab = data ? data.vocab.slice(0, 5).map(v => `${v.w} (${v.m})`).join(', ') : '';
 
   if (!apiKey) {
     const replies = ['Interesting! Tell me more.', 'Great point! Can you elaborate?', 'Excellent! Keep going.', 'I see! What else?'];
@@ -695,14 +719,20 @@ async function respondToCaller(msg) {
   }
 
   try {
-    const context = `Lesson story: ${story.substring(0, 400)}\n\nStudent just said: "${msg}"\n\nRespond conversationally in English. Keep it natural and encouraging. Correct gently if needed.`;
+    const context = `Lesson topic: "${topic}"
+Key vocabulary: ${vocab}
+Story: ${story.substring(0, 300)}
+
+Student just said: "${msg}"
+
+Ask a question about the story topic and try to use the vocabulary words naturally. Keep responses short (1-2 sentences). Be encouraging.`;
 
     const reply = await callAI([
-      { role: 'system', content: 'You are an English tutor in a video call. Respond naturally and conversationally. Keep responses short (1-2 sentences). Be encouraging.' },
+      { role: 'system', content: 'You are an English tutor in a video call. Ask the student questions about the lesson story and encourage them to use the new vocabulary. Keep responses short. Be encouraging and correct gently.' },
       { role: 'user', content: context }
-    ], 150);
+    ], 200);
 
-    await speakAIResponse(reply || 'Great! Keep talking.');
+    await speakAIResponse(reply || 'Great! Keep talking. Try using the new words!');
   } catch (e) {
     await speakAIResponse('Sorry, let me try again. Tell me more!');
   }
@@ -766,10 +796,13 @@ async function sendChatMessage() {
 
   try {
     const story = document.getElementById('listening-text')?.textContent || '';
+    const topic = (TOPICS[currentLevel] || [])[currentLesson] || '';
+    const data = getLessonData(currentLevel, currentLesson);
+    const vocab = data ? data.vocab.slice(0, 5).map(v => `${v.w} (${v.m})`).join(', ') : '';
     const reply = await callAI([
-      { role: 'system', content: 'You are an English tutor. Respond conversationally in 1-2 sentences.' },
-      { role: 'user', content: `Story: ${story.substring(0, 300)}\nStudent: ${msg}` }
-    ], 150);
+      { role: 'system', content: 'You are an English tutor. Ask about the story topic and encourage using new vocabulary. Keep responses short (1-2 sentences).' },
+      { role: 'user', content: `Topic: "${topic}"\nVocabulary: ${vocab}\nStory: ${story.substring(0, 300)}\nStudent: ${msg}` }
+    ], 200);
     addCallBubble(reply || 'Great! Tell me more.', 'bot');
   } catch (e) {
     addCallBubble('Sorry, try again!', 'bot');

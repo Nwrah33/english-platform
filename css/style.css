@@ -107,9 +107,9 @@ main{flex:1;padding:32px 0}
 .podcast-timer{color:#fff;font-family:monospace;font-size:0.9rem;min-width:80px}
 .podcast-transcript{background:#fafafa;border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;font-size:0.95rem;line-height:1.8;max-height:300px;overflow-y:auto}
 .podcast-transcript h4{font-size:0.95rem;margin-bottom:8px;color:var(--primary)}
-.podcast-transcript .podcast-speaker{font-weight:700;color:var(--primary)}
-.podcast-transcript .podcast-speaker.host{color:#7c3aed}
-.podcast-transcript .podcast-speaker.guest{color:#0891b2}
+.podcast-line{padding:8px 12px;margin:4px 0;border-radius:6px;font-size:0.95rem}
+.podcast-line.host{background:#f0f4ff;border-right:3px solid #7c3aed}
+.podcast-line.guest{background:#fefce8;border-right:3px solid #0891b2}
 
 /* Video Call */
 .video-call-container{display:grid;grid-template-columns:1fr 1fr;gap:16px}
