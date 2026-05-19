@@ -493,36 +493,50 @@ function playPodcast() {
 }
 
 async function playAIPodcast() {
+  let useAI = true;
   while (podcastSentenceIndex < podcastSentences.length && isPodcastPlaying) {
     const sentence = podcastSentences[podcastSentenceIndex];
     const speaker = podcastSpeakers[podcastSentenceIndex] || 'host';
-    const voice = speaker === 'host' ? 'nova' : 'onyx'; // nova=female, onyx=male
+    const voice = speaker === 'host' ? 'nova' : 'onyx';
 
-    // Highlight speaker
     document.querySelectorAll('.podcast-line').forEach((el, i) => {
       el.style.background = i === podcastSentenceIndex ? (speaker === 'host' ? '#e0e7ff' : '#fef9c3') : '';
       el.style.fontWeight = i === podcastSentenceIndex ? '700' : '400';
     });
 
-    const blob = await callAITTS(sentence, voice);
-    if (blob && isPodcastPlaying) {
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      await new Promise(resolve => {
-        audio.onended = resolve;
-        audio.onerror = resolve;
-        audio.play().catch(resolve);
-      });
-      URL.revokeObjectURL(url);
-    } else {
-      // Fallback to speechSynthesis for this sentence
+    if (useAI) {
+      const blob = await callAITTS(sentence, voice);
+      if (blob && isPodcastPlaying) {
+        try {
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          await new Promise((resolve) => {
+            const timer = setTimeout(resolve, 15000);
+            audio.onended = () => { clearTimeout(timer); resolve(); };
+            audio.onerror = () => { clearTimeout(timer); resolve(); };
+            audio.play().catch(() => { clearTimeout(timer); resolve(); });
+          });
+          URL.revokeObjectURL(url);
+        } catch (e) { useAI = false; }
+      } else {
+        useAI = false;
+      }
+    }
+
+    if (!useAI) {
+      // Fallback to original system voices
+      if (speechSynthesis.speaking) speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(sentence);
       utter.lang = 'en-US';
-      utter.rate = 0.85;
-      utter.pitch = speaker === 'host' ? 1.3 : 0.7;
+      const baseRate = parseFloat(document.getElementById('podcast-speed').value) || 0.75;
+      utter.rate = speaker === 'host' ? baseRate : baseRate * 0.65;
+      utter.pitch = speaker === 'host' ? 1.4 : 0.6;
+      const v = getVoiceByGender(speaker === 'host' ? 'female' : 'male');
+      if (v) utter.voice = v;
       await new Promise(resolve => {
-        utter.onend = resolve;
-        utter.onerror = resolve;
+        const timer = setTimeout(resolve, 5000);
+        utter.onend = () => { clearTimeout(timer); resolve(); };
+        utter.onerror = () => { clearTimeout(timer); resolve(); };
         speechSynthesis.speak(utter);
       });
     }
@@ -530,13 +544,27 @@ async function playAIPodcast() {
     document.querySelectorAll('.podcast-line').forEach(el => { el.style.background = ''; el.style.fontWeight = '400'; });
     podcastSentenceIndex++;
     updatePodcastTimer();
-    if (isPodcastPlaying) await new Promise(r => setTimeout(r, 400));
+    if (isPodcastPlaying) await new Promise(r => setTimeout(r, 600));
   }
   stopPodcast();
 }
 
 let podcastFemaleVoice = null;
 let podcastMaleVoice = null;
+
+function getVoiceByGender(gender) {
+  const voices = speechSynthesis.getVoices();
+  const enVoices = voices.filter(v => v.lang.startsWith('en'));
+  if (enVoices.length === 0) return null;
+  const femaleKeys = ['zira', 'female', 'woman', 'girl', 'samantha', 'victoria', 'karen', 'hazel', 'catherine', 'linda', 'susan'];
+  const maleKeys = ['david', 'mark', 'male', 'man', 'boy', 'james', 'john', 'george', 'paul', 'daniel', 'richard'];
+  const keys = gender === 'female' ? femaleKeys : maleKeys;
+  for (const key of keys) {
+    const found = enVoices.find(v => v.name.toLowerCase().includes(key));
+    if (found) return found;
+  }
+  return gender === 'female' ? enVoices[0] : (enVoices.length > 1 ? enVoices[1] : enVoices[0]);
+}
 
 function initPodcastVoices() {
   const voices = speechSynthesis.getVoices();
