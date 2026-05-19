@@ -448,13 +448,19 @@ function getVoiceByGender(gender) {
   const voices = speechSynthesis.getVoices();
   const enVoices = voices.filter(v => v.lang.startsWith('en'));
   if (enVoices.length === 0) return null;
-  if (gender === 'female') {
-    const f = enVoices.find(v => /female|woman|girl|samantha|victoria|karen|zira|microsoft\s*zira/i.test(v.name));
-    return f || enVoices[0];
-  } else {
-    const m = enVoices.find(v => /male|man|boy|david|james|john|mark|microsoft\s*david|google\s*us\s*english/i.test(v.name));
-    return m || (enVoices.length > 1 ? enVoices[1] : enVoices[0]);
+  // Female: prefer Zira, then any voice with female name keywords
+  const femaleKeys = ['zira', 'female', 'woman', 'girl', 'samantha', 'victoria', 'karen', 'hazel', 'catherine', 'linda', 'susan'];
+  // Male: prefer David, Mark, then any voice with male name keywords
+  const maleKeys = ['david', 'mark', 'male', 'man', 'boy', 'james', 'john', 'george', 'paul', 'daniel', 'richard'];
+  const keys = gender === 'female' ? femaleKeys : maleKeys;
+  for (const key of keys) {
+    const found = enVoices.find(v => v.name.toLowerCase().includes(key));
+    if (found) return found;
   }
+  // Fallback: return a different voice to avoid same voice for both
+  const defaultVoice = enVoices[0];
+  const altVoice = enVoices.length > 1 ? enVoices[1] : defaultVoice;
+  return gender === 'female' ? defaultVoice : altVoice;
 }
 
 function speakNextPodcastSentence() {
@@ -471,6 +477,7 @@ function speakNextPodcastSentence() {
 
   const voice = getVoiceByGender(speaker === 'host' ? 'female' : 'male');
   if (voice) podcastUtterance.voice = voice;
+  podcastUtterance.pitch = speaker === 'host' ? 1.1 : 0.9;
 
   podcastUtterance.onend = () => {
     podcastSentenceIndex++;
