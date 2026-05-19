@@ -452,9 +452,7 @@ function initPodcastVoices() {
   const enVoices = voices.filter(v => v.lang.startsWith('en'));
   if (enVoices.length === 0) return;
 
-  // Try to find female voice (Zira, etc.)
   const femaleNames = ['zira', 'female', 'woman', 'girl', 'samantha', 'victoria', 'karen', 'hazel', 'catherine', 'linda', 'susan'];
-  // Try to find male voice (David, Mark, etc.)
   const maleNames = ['david', 'mark', 'male', 'man', 'boy', 'james', 'john', 'george', 'paul', 'daniel', 'richard'];
 
   podcastFemaleVoice = null;
@@ -469,12 +467,9 @@ function initPodcastVoices() {
     if (m) { podcastMaleVoice = m; break; }
   }
 
-  // Assign voices - try to get at least 2 different ones
   if (!podcastFemaleVoice) podcastFemaleVoice = enVoices[0];
   if (!podcastMaleVoice) {
-    // Pick the last English voice for male (might be different from female)
     podcastMaleVoice = enVoices[enVoices.length - 1];
-    // If it's the same voice, try to find any different voice
     if (podcastMaleVoice.name === podcastFemaleVoice.name && enVoices.length > 1) {
       podcastMaleVoice = enVoices[1];
     }
@@ -482,7 +477,7 @@ function initPodcastVoices() {
 
   console.log('🎙️ Female voice:', podcastFemaleVoice?.name);
   console.log('🎙️ Male voice:', podcastMaleVoice?.name);
-  console.log('🎙️ All English voices:', enVoices.map(v => v.name));
+  console.log('🎙️ All English voices:', enVoices.map(v => `${v.name} (${v.lang})`));
 }
 
 function speakNextPodcastSentence() {
@@ -491,23 +486,33 @@ function speakNextPodcastSentence() {
     return;
   }
 
+  // Re-init voices in case they loaded after page load
+  if (!podcastFemaleVoice && !podcastMaleVoice) initPodcastVoices();
+
   const sentence = podcastSentences[podcastSentenceIndex];
   const speaker = podcastSpeakers[podcastSentenceIndex] || 'host';
   const isFemale = speaker === 'host';
 
+  // Highlight current speaker in transcript
+  document.querySelectorAll('.podcast-line').forEach((el, i) => {
+    el.style.background = i === podcastSentenceIndex ? (isFemale ? '#e0e7ff' : '#fef9c3') : '';
+    el.style.fontWeight = i === podcastSentenceIndex ? '700' : '400';
+  });
+
   podcastUtterance = new SpeechSynthesisUtterance(sentence);
   podcastUtterance.lang = 'en-US';
   const baseRate = parseFloat(document.getElementById('podcast-speed').value) || 0.75;
-  podcastUtterance.rate = isFemale ? baseRate : baseRate * 0.75;
-  podcastUtterance.pitch = isFemale ? 1.4 : 0.6;
+  podcastUtterance.rate = isFemale ? baseRate : baseRate * 0.65;
+  podcastUtterance.pitch = isFemale ? 1.5 : 0.5;
   podcastUtterance.volume = 1;
 
   if (isFemale && podcastFemaleVoice) podcastUtterance.voice = podcastFemaleVoice;
   else if (!isFemale && podcastMaleVoice) podcastUtterance.voice = podcastMaleVoice;
 
   podcastUtterance.onend = () => {
+    document.querySelectorAll('.podcast-line').forEach(el => { el.style.background = ''; el.style.fontWeight = '400'; });
     podcastSentenceIndex++;
-    setTimeout(speakNextPodcastSentence, 400);
+    setTimeout(speakNextPodcastSentence, 500);
     updatePodcastTimer();
   };
 
