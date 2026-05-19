@@ -155,7 +155,8 @@ function generateVocab(level, idx) {
   if (VOCAB[level] && VOCAB[level][idx]) return VOCAB[level][idx];
   const topics = TOPICS[level];
   const topic = topics ? topics[idx] || 'General' : 'General';
-  const words = topic.split(' ').filter(w => w.length > 4).slice(0, 5);
+  const count = level === 'A1' ? 5 : level === 'A2' ? 6 : level === 'B1' ? 8 : level === 'B2' ? 10 : level === 'C1' ? 12 : 15;
+  const words = topic.split(' ').filter(w => w.length > 4).slice(0, count);
   return words.map(w => {
     const lower = w.toLowerCase();
     return { w, m: `معنى ${lower}`, p: `/${lower}/`, e: `"${w}" is an important word in this lesson.` };
@@ -165,13 +166,17 @@ function generateVocab(level, idx) {
 function generateQuestions(level, idx, story) {
   if (QUESTIONS[level] && QUESTIONS[level][idx]) return QUESTIONS[level][idx];
   const sentences = story.split(/[.!?]+/).filter(s => s.trim().split(' ').length > 5);
-  return sentences.slice(0, 5).map((s, i) => {
+  const qCount = level === 'A1' || level === 'A2' ? 5 : level === 'B1' || level === 'B2' ? 8 : 10;
+  return sentences.slice(0, qCount).map((s, i) => {
     const words = s.trim().split(' ');
     const keyWord = words.find(w => w.length > 4) || words[0] || 'topic';
     const cleanW = keyWord.replace(/[^a-zA-Z]/g, '');
+    const isHard = level === 'B2' || level === 'C1' || level === 'C2';
     return {
-      q: `What does the story say about "${cleanW || 'the topic'}"?`,
-      o: [`It mentions that ${cleanW} is important`, `The story does not mention this`, `It describes ${cleanW} in detail`, `It says ${cleanW} is the main idea`],
+      q: isHard ? `Based on the story, what can be inferred about "${cleanW || 'the topic'}"?` : `What does the story say about "${cleanW || 'the topic'}"?`,
+      o: isHard
+        ? [`The author implies that ${cleanW} has significant importance`, `The author rejects the importance of ${cleanW}`, `${cleanW} is only briefly mentioned without analysis`, `The story contradicts common beliefs about ${cleanW}`]
+        : [`It mentions that ${cleanW} is important`, `The story does not mention this`, `It describes ${cleanW} in detail`, `It says ${cleanW} is the main idea`],
       a: 0
     };
   });

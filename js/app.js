@@ -12,7 +12,7 @@ let recognition = null;
 let isVoiceChat = false;
 
 const LEVEL_REQ = { A2: 'A1', B1: 'A2', B2: 'B1', C1: 'B2', C2: 'C1' };
-const LEVEL_PASS_SCORE = 80;
+const LEVEL_PASS_SCORE = 100;
 
 function navigate(view) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -167,9 +167,15 @@ async function generateAIContent(levelId, lessonIdx, topic, force = false) {
   document.getElementById('story-text').innerHTML = '<div class="loading"><div class="spinner"></div><p>جاري إنشاء المحتوى بالذكاء الاصطناعي...</p></div>';
 
   const levelDesc = getLevelDesc(levelId);
+  const storyLength = levelId === 'A1' ? '3-4 short simple sentences' : levelId === 'A2' ? '5-6 sentences' : levelId === 'B1' ? '8-10 sentences with some detail' : levelId === 'B2' ? '12-15 sentences with complex structures' : levelId === 'C1' ? '15-20 sentences with advanced vocabulary and idioms' : '20-25 sentences with sophisticated academic vocabulary and complex grammar';
+  const vocabCount = levelId === 'A1' ? 5 : levelId === 'A2' ? 6 : levelId === 'B1' ? 8 : levelId === 'B2' ? 10 : levelId === 'C1' ? 12 : 15;
+  const questionCount = levelId === 'A1' || levelId === 'A2' ? 5 : levelId === 'B1' || levelId === 'B2' ? 8 : 10;
+
   const prompt = `You are an English teacher. Create a lesson for level ${levelId} student.
 Topic: "${topic}"
 Requirements: ${levelDesc}
+
+Create a story that is: ${storyLength}
 
 Return valid JSON only (no markdown):
 {
@@ -182,9 +188,9 @@ Return valid JSON only (no markdown):
   ]
 }
 
-Story: ${levelDesc}
-Vocab: 5 important words from the story with Arabic meanings.
-Questions: 5 multiple-choice comprehension questions about the story. First option (index 0) is always correct.`;
+Story: ${storyLength}
+Vocab: ${vocabCount} important words from the story with Arabic meanings. Include more advanced words for higher levels.
+Questions: ${questionCount} multiple-choice comprehension questions about the story. First option (index 0) is always correct. Make questions harder for higher levels.`;
 
   const result = await callAI([
     { role: 'system', content: 'You are an expert English teacher. Generate lessons in valid JSON only. No markdown.' },
@@ -231,6 +237,7 @@ async function openLesson(index) {
 
     // Podcast
     const podcastLines = generatePodcastFromStory(data.story, topic, currentLevel);
+    podcastSentences = podcastLines.map(l => l.text);
     podcastSpeakers = podcastLines.map(l => l.speaker);
     const podcastEl = document.getElementById('podcast-text');
     if (podcastEl) {
@@ -299,8 +306,6 @@ function showTranslation(word, event) {
   selectedWord = word;
   document.getElementById('translation-word').textContent = word;
 
-  // Try to find translation from vocab
-  const storyEl = document.getElementById('story-text');
   const arabicDict = getArabicDict();
   const meaning = arabicDict[word.toLowerCase()] || '... اضغط على "حفظ" لترجمة هذه الكلمة';
 
@@ -316,6 +321,9 @@ function showTranslation(word, event) {
     document.body.appendChild(overlay);
   }
   overlay.style.display = 'block';
+
+  // Auto-pronounce the word
+  speakWord(word);
 }
 
 function closeTranslation() {
@@ -350,25 +358,54 @@ function getArabicDict() {
 function generatePodcastFromStory(story, topic, levelId) {
   const level = levelId || 'A1';
   const sentences = story.split(/[.!?]+/).filter(s => s.trim().length > 10);
+  const sentenceCount = level === 'A1' ? 4 : level === 'A2' ? 6 : level === 'B1' ? 8 : level === 'B2' ? 10 : 12;
 
   let podcastLines = [];
 
-  if (level === 'A1' || level === 'A2') {
-    podcastLines.push({ speaker: 'host', text: `Hello and welcome to today's podcast! We're talking about ${topic}.` });
-    podcastLines.push({ speaker: 'guest', text: `Hi! Yes, I'm excited to talk about ${topic}. Let me share what I know.` });
-    sentences.slice(0, 4).forEach(s => {
+  if (level === 'A1') {
+    podcastLines.push({ speaker: 'host', text: `Hello and welcome! Today we talk about: ${topic}.` });
+    podcastLines.push({ speaker: 'guest', text: `Hi! I'm happy to be here. Let's learn about ${topic}.` });
+    sentences.slice(0, sentenceCount).forEach((s, i) => {
       if (s.trim()) {
-        podcastLines.push({ speaker: 'host', text: s.trim() + '.' });
-        podcastLines.push({ speaker: 'guest', text: `That's interesting! Tell me more about ${topic}.` });
+        podcastLines.push({ speaker: i % 2 === 0 ? 'host' : 'guest', text: s.trim() + '.' });
+        podcastLines.push({ speaker: i % 2 === 0 ? 'guest' : 'host', text: `Good! Tell me more.` });
+      }
+    });
+  } else if (level === 'A2') {
+    podcastLines.push({ speaker: 'host', text: `Hello everyone! Today's topic is ${topic}.` });
+    podcastLines.push({ speaker: 'guest', text: `Hi! I'd like to share my thoughts about ${topic}.` });
+    sentences.slice(0, sentenceCount).forEach((s, i) => {
+      if (s.trim()) {
+        podcastLines.push({ speaker: i % 2 === 0 ? 'host' : 'guest', text: s.trim() + '.' });
+        podcastLines.push({ speaker: i % 2 === 0 ? 'guest' : 'host', text: `That's interesting! What else can you say?` });
+      }
+    });
+  } else if (level === 'B1') {
+    podcastLines.push({ speaker: 'host', text: `Welcome to English Learning Podcast. Today we discuss: ${topic}.` });
+    podcastLines.push({ speaker: 'guest', text: `Thanks for having me. ${topic} is very useful for intermediate learners.` });
+    sentences.slice(0, sentenceCount).forEach((s, i) => {
+      if (s.trim()) {
+        podcastLines.push({ speaker: i % 2 === 0 ? 'host' : 'guest', text: s.trim() + '.' });
+        podcastLines.push({ speaker: i % 2 === 0 ? 'guest' : 'host', text: `Excellent perspective. Could you explain further?` });
+      }
+    });
+  } else if (level === 'B2') {
+    podcastLines.push({ speaker: 'host', text: `Welcome back to English Learning Podcast. Today's in-depth topic: ${topic}.` });
+    podcastLines.push({ speaker: 'guest', text: `Thank you! ${topic} offers many interesting angles for upper-intermediate discussion.` });
+    sentences.slice(0, sentenceCount).forEach((s, i) => {
+      if (s.trim()) {
+        podcastLines.push({ speaker: i % 2 === 0 ? 'host' : 'guest', text: s.trim() + '.' });
+        podcastLines.push({ speaker: i % 2 === 0 ? 'guest' : 'host', text: `That's a great observation. How does this relate to the broader context?` });
       }
     });
   } else {
-    podcastLines.push({ speaker: 'host', text: `Welcome to English Learning Podcast. Today's topic: ${topic}.` });
-    podcastLines.push({ speaker: 'guest', text: `Thank you for having me. ${topic} is a fascinating subject for ${level} learners.` });
-    sentences.slice(0, 6).forEach(s => {
+    // C1 and C2
+    podcastLines.push({ speaker: 'host', text: `Welcome to Advanced English Discussions. Today we analyze: ${topic}.` });
+    podcastLines.push({ speaker: 'guest', text: `Pleasure to be here. ${topic} is a sophisticated subject requiring nuanced understanding.` });
+    sentences.slice(0, sentenceCount).forEach((s, i) => {
       if (s.trim()) {
-        podcastLines.push({ speaker: 'host', text: s.trim() + '.' });
-        podcastLines.push({ speaker: 'guest', text: `Excellent point! Could you elaborate on that?` });
+        podcastLines.push({ speaker: i % 2 === 0 ? 'host' : 'guest', text: s.trim() + '.' });
+        podcastLines.push({ speaker: i % 2 === 0 ? 'guest' : 'host', text: `Fascinating. Could you provide more detailed analysis on this aspect?` });
       }
     });
   }
@@ -390,8 +427,7 @@ function getPodcastText(podcastLines) {
 }
 
 function playPodcast() {
-  const text = document.getElementById('podcast-text').textContent;
-  if (!text) { alert('لا يوجد نص بودكاست.'); return; }
+  if (podcastSentences.length === 0) { alert('لا يوجد نص بودكاست.'); return; }
 
   if (isPodcastPlaying) {
     speechSynthesis.resume();
@@ -400,15 +436,7 @@ function playPodcast() {
 
   stopPodcast();
 
-  const lines = text.split('\n').filter(l => l.trim());
-  const sentences = lines.map(l => l.replace(/^[HG]:\s*/, '').trim()).filter(l => l);
-  podcastSentences = sentences;
-  // match speakers to lines (use stored speakers or fallback to alternating)
-  if (podcastSpeakers.length === 0) {
-    podcastSpeakers = podcastSentences.map((_, i) => i % 2 === 0 ? 'host' : 'guest');
-  }
   podcastSentenceIndex = 0;
-
   isPodcastPlaying = true;
   document.getElementById('podcast-play-btn').textContent = '⏸️';
   document.querySelector('.podcast-wave').classList.remove('paused');
@@ -616,6 +644,9 @@ function quickSaveVocab(word, meaning) {
 let isCallActive = false;
 let callRecognition = null;
 let callAIResponse = null;
+let callTimer = null;
+let callTimeLeft = 0;
+const LEVEL_CALL_TIMES = { A1: 60, A2: 90, B1: 120, B2: 150, C1: 180, C2: 240 };
 
 function addCallBubble(text, type) {
   const conv = document.getElementById('call-conversation');
@@ -651,6 +682,24 @@ async function startVideoCall() {
   document.getElementById('call-start-btn').style.display = 'none';
   document.getElementById('call-end-btn').style.display = 'inline-block';
   updateCallStatus('🟢 المكالمة قيد التشغيل...', '');
+
+  // Start conversation timer based on level
+  callTimeLeft = LEVEL_CALL_TIMES[currentLevel] || 60;
+  if (callTimer) clearInterval(callTimer);
+  callTimer = setInterval(() => {
+    callTimeLeft--;
+    const timerEl = document.getElementById('call-timer');
+    if (timerEl) {
+      const m = Math.floor(callTimeLeft / 60);
+      const s = callTimeLeft % 60;
+      timerEl.textContent = `⏱ ${m}:${s.toString().padStart(2, '0')}`;
+      timerEl.style.color = callTimeLeft < 15 ? 'var(--danger)' : 'var(--text2)';
+    }
+    if (callTimeLeft <= 0) {
+      clearInterval(callTimer);
+      endVideoCall();
+    }
+  }, 1000);
 
   const topic = (TOPICS[currentLevel] || [])[currentLesson] || 'this topic';
   const greeting = `Hi there! I'm your English tutor. Let's talk about "${topic}". Can you tell me what you learned from the story in your own words?`;
@@ -762,6 +811,7 @@ function speakAIResponse(text) {
 
 function endVideoCall() {
   isCallActive = false;
+  if (callTimer) { clearInterval(callTimer); callTimer = null; }
   if (callRecognition) { try { callRecognition.stop(); } catch {} }
   if (speechSynthesis.speaking) speechSynthesis.cancel();
 
@@ -769,6 +819,8 @@ function endVideoCall() {
   document.getElementById('call-end-btn').style.display = 'none';
   updateCallStatus('🟢 المكالمة منتهية', '');
   addCallBubble('📞 المكالمة انتهت. تدرب مرة أخرى!', 'bot');
+  const timerEl = document.getElementById('call-timer');
+  if (timerEl) timerEl.textContent = '';
 }
 
 // Text chat (fallback for video call)
