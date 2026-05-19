@@ -432,20 +432,22 @@ let ambientInterval = null;
 function startAmbient() {
   try {
     ambientAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    // Gentle birds chirping every 2-4 seconds
-    ambientInterval = setInterval(() => {
-      if (!ambientAudioCtx) return;
+    function chirp() {
+      if (!ambientAudioCtx || !isPodcastPlaying) return;
       const osc = ambientAudioCtx.createOscillator();
       const gain = ambientAudioCtx.createGain();
       osc.connect(gain);
       gain.connect(ambientAudioCtx.destination);
-      osc.frequency.value = 3000 + Math.random() * 2000;
+      osc.frequency.value = 2500 + Math.random() * 2000;
       osc.type = 'sine';
-      gain.gain.setValueAtTime(0.02, ambientAudioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ambientAudioCtx.currentTime + 0.15);
-      osc.start(ambientAudioCtx.currentTime);
-      osc.stop(ambientAudioCtx.currentTime + 0.15);
-    }, 2500 + Math.random() * 1500);
+      const now = ambientAudioCtx.currentTime;
+      gain.gain.setValueAtTime(0.015, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.start(now);
+      osc.stop(now + 0.12);
+      ambientInterval = setTimeout(chirp, 3000 + Math.random() * 3000);
+    }
+    chirp();
   } catch (e) {}
 }
 
@@ -454,99 +456,16 @@ function stopAmbient() {
   if (ambientAudioCtx) { ambientAudioCtx.close().catch(() => {}); ambientAudioCtx = null; }
 }
 
-async function callAITTS(text, voice) {
-  const key = getApiKey();
-  if (!key) return null;
-  try {
-    const res = await fetch('https://api.openai.com/v1/audio/speech', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'tts-1', input: text, voice, response_format: 'mp3' })
-    });
-    if (!res.ok) return null;
-    return await res.blob();
-  } catch (e) { return null; }
-}
-
 function playPodcast() {
   if (podcastSentences.length === 0) { alert('لا يوجد نص بودكاست.'); return; }
-
-  if (isPodcastPlaying) {
-    speechSynthesis.resume();
-    return;
-  }
-
+  if (isPodcastPlaying) { speechSynthesis.resume(); return; }
   stopPodcast();
-
   podcastSentenceIndex = 0;
   isPodcastPlaying = true;
   document.getElementById('podcast-play-btn').textContent = '⏸️';
   document.querySelector('.podcast-wave').classList.remove('paused');
-
-  // Try AI voices first, fallback to speechSynthesis
-  if (getApiKey()) {
-    startAmbient();
-    playAIPodcast();
-  } else {
-    speakNextPodcastSentence();
-  }
-}
-
-async function playAIPodcast() {
-  let useAI = true;
-  while (podcastSentenceIndex < podcastSentences.length && isPodcastPlaying) {
-    const sentence = podcastSentences[podcastSentenceIndex];
-    const speaker = podcastSpeakers[podcastSentenceIndex] || 'host';
-    const voice = speaker === 'host' ? 'nova' : 'onyx';
-
-    document.querySelectorAll('.podcast-line').forEach((el, i) => {
-      el.style.background = i === podcastSentenceIndex ? (speaker === 'host' ? '#e0e7ff' : '#fef9c3') : '';
-      el.style.fontWeight = i === podcastSentenceIndex ? '700' : '400';
-    });
-
-    if (useAI) {
-      const blob = await callAITTS(sentence, voice);
-      if (blob && isPodcastPlaying) {
-        try {
-          const url = URL.createObjectURL(blob);
-          const audio = new Audio(url);
-          await new Promise((resolve) => {
-            const timer = setTimeout(resolve, 15000);
-            audio.onended = () => { clearTimeout(timer); resolve(); };
-            audio.onerror = () => { clearTimeout(timer); resolve(); };
-            audio.play().catch(() => { clearTimeout(timer); resolve(); });
-          });
-          URL.revokeObjectURL(url);
-        } catch (e) { useAI = false; }
-      } else {
-        useAI = false;
-      }
-    }
-
-    if (!useAI) {
-      // Fallback to original system voices
-      if (speechSynthesis.speaking) speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(sentence);
-      utter.lang = 'en-US';
-      const baseRate = parseFloat(document.getElementById('podcast-speed').value) || 0.75;
-      utter.rate = speaker === 'host' ? baseRate : baseRate * 0.65;
-      utter.pitch = speaker === 'host' ? 1.4 : 0.6;
-      const v = getVoiceByGender(speaker === 'host' ? 'female' : 'male');
-      if (v) utter.voice = v;
-      await new Promise(resolve => {
-        const timer = setTimeout(resolve, 5000);
-        utter.onend = () => { clearTimeout(timer); resolve(); };
-        utter.onerror = () => { clearTimeout(timer); resolve(); };
-        speechSynthesis.speak(utter);
-      });
-    }
-
-    document.querySelectorAll('.podcast-line').forEach(el => { el.style.background = ''; el.style.fontWeight = '400'; });
-    podcastSentenceIndex++;
-    updatePodcastTimer();
-    if (isPodcastPlaying) await new Promise(r => setTimeout(r, 600));
-  }
-  stopPodcast();
+  startAmbient();
+  setTimeout(speakNextPodcastSentence, 800);
 }
 
 let podcastFemaleVoice = null;
@@ -600,19 +519,17 @@ function initPodcastVoices() {
 }
 
 function speakNextPodcastSentence() {
-  if (podcastSentenceIndex >= podcastSentences.length) {
+  if (!isPodcastPlaying || podcastSentenceIndex >= podcastSentences.length) {
     stopPodcast();
     return;
   }
 
-  // Re-init voices in case they loaded after page load
   if (!podcastFemaleVoice && !podcastMaleVoice) initPodcastVoices();
 
   const sentence = podcastSentences[podcastSentenceIndex];
   const speaker = podcastSpeakers[podcastSentenceIndex] || 'host';
   const isFemale = speaker === 'host';
 
-  // Highlight current speaker in transcript
   document.querySelectorAll('.podcast-line').forEach((el, i) => {
     el.style.background = i === podcastSentenceIndex ? (isFemale ? '#e0e7ff' : '#fef9c3') : '';
     el.style.fontWeight = i === podcastSentenceIndex ? '700' : '400';
@@ -621,21 +538,24 @@ function speakNextPodcastSentence() {
   podcastUtterance = new SpeechSynthesisUtterance(sentence);
   podcastUtterance.lang = 'en-US';
   const baseRate = parseFloat(document.getElementById('podcast-speed').value) || 0.75;
-  podcastUtterance.rate = isFemale ? baseRate : baseRate * 0.65;
+  podcastUtterance.rate = isFemale ? baseRate : baseRate * 0.6;
   podcastUtterance.pitch = isFemale ? 1.5 : 0.5;
   podcastUtterance.volume = 1;
 
-  if (isFemale && podcastFemaleVoice) podcastUtterance.voice = podcastFemaleVoice;
-  else if (!isFemale && podcastMaleVoice) podcastUtterance.voice = podcastMaleVoice;
+  const voice = getVoiceByGender(isFemale ? 'female' : 'male');
+  if (voice) podcastUtterance.voice = voice;
 
   podcastUtterance.onend = () => {
     document.querySelectorAll('.podcast-line').forEach(el => { el.style.background = ''; el.style.fontWeight = '400'; });
     podcastSentenceIndex++;
-    setTimeout(speakNextPodcastSentence, 500);
+    setTimeout(speakNextPodcastSentence, 700);
     updatePodcastTimer();
   };
 
-  podcastUtterance.onerror = () => { stopPodcast(); };
+  podcastUtterance.onerror = () => {
+    podcastSentenceIndex++;
+    setTimeout(speakNextPodcastSentence, 500);
+  };
 
   speechSynthesis.speak(podcastUtterance);
   updatePodcastTimer();
